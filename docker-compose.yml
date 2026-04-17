@@ -1,19 +1,32 @@
 services:
-  ai-news:
+  lattice:
     build: .
     container_name: lattice
     restart: unless-stopped
-    ports:
-      - "3200:3000"
+    security_opt:
+      - no-new-privileges:true
+    expose:
+      - "3000"
     volumes:
-      # Mount feeds.json so you can edit without rebuilding
       - ./feeds.json:/app/feeds.json:ro
     environment:
       - PORT=3000
-      # Cache TTL in seconds (default 900 = 15 min)
       - CACHE_TTL=900
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
+    networks:
+      proxy:
+    labels:
+      - "traefik.enable=true"
+      # HTTP -> HTTPS redirect
+      - "traefik.http.routers.lattice.entrypoints=http"
+      - "traefik.http.routers.lattice.rule=Host(`lattice.dcwd.dev`)"
+      - "traefik.http.routers.lattice.middlewares=traefik-https-redirect"
+      # HTTPS
+      - "traefik.http.routers.lattice-secure.entrypoints=https"
+      - "traefik.http.routers.lattice-secure.rule=Host(`lattice.dcwd.dev`)"
+      - "traefik.http.routers.lattice-secure.tls=true"
+      - "traefik.http.routers.lattice-secure.tls.certresolver=cloudflare"
+      - "traefik.http.services.lattice.loadbalancer.server.port=3000"
+
+networks:
+  proxy:
+    external: true
