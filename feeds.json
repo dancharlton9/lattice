@@ -1,0 +1,19 @@
+[
+  { "url": "https://www.anthropic.com/rss.xml", "category": "Labs", "name": "Anthropic", "icon": "brain" },
+  { "url": "https://openai.com/blog/rss.xml", "category": "Labs", "name": "OpenAI", "icon": "bot" },
+  { "url": "https://blog.google/technology/ai/rss/", "category": "Labs", "name": "Google AI", "icon": "sparkles" },
+  { "url": "https://about.fb.com/news/category/ai/feed/", "category": "Labs", "name": "Meta AI", "icon": "hexagon" },
+  { "url": "https://huggingface.co/blog/feed.xml", "category": "Community", "name": "Hugging Face", "icon": "smile" },
+  { "url": "https://simonwillison.net/atom/everything/", "category": "Blogs", "name": "Simon Willison", "icon": "pen-tool" },
+  { "url": "https://lilianweng.github.io/index.xml", "category": "Research", "name": "Lil'Log", "icon": "microscope" },
+  { "url": "https://old.reddit.com/r/MachineLearning/.rss", "category": "Community", "name": "r/MachineLearning", "icon": "message-circle" },
+  { "url": "https://old.reddit.com/r/LocalLLaMA/.rss", "category": "Community", "name": "r/LocalLLaMA", "icon": "message-circle" },
+  { "url": "https://hnrss.org/newest?q=AI+OR+LLM+OR+GPT+OR+Claude&points=50", "category": "Community", "name": "Hacker News", "icon": "terminal" },
+  { "url": "https://www.technologyreview.com/feed/", "category": "News", "name": "MIT Tech Review", "icon": "newspaper" },
+  { "url": "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml", "category": "News", "name": "The Verge AI", "icon": "monitor" },
+  { "url": "https://techcrunch.com/category/artificial-intelligence/feed/", "category": "News", "name": "TechCrunch AI", "icon": "rocket" },
+  { "url": "https://arxiv.org/rss/cs.AI", "category": "Research", "name": "arXiv cs.AI", "icon": "file-text" },
+  { "url": "https://arxiv.org/rss/cs.CL", "category": "Research", "name": "arXiv NLP", "icon": "file-text" },
+  { "url": "https://jack-clark.net/feed/", "category": "Newsletters", "name": "Import AI", "icon": "mail" },
+  { "url": "https://buttondown.com/ainews/rss", "category": "Newsletters", "name": "AI News", "icon": "inbox" }
+]

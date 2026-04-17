@@ -1,0 +1,19 @@
+services:
+  ai-news:
+    build: .
+    container_name: lattice
+    restart: unless-stopped
+    ports:
+      - "3200:3000"
+    volumes:
+      # Mount feeds.json so you can edit without rebuilding
+      - ./feeds.json:/app/feeds.json:ro
+    environment:
+      - PORT=3000
+      # Cache TTL in seconds (default 900 = 15 min)
+      - CACHE_TTL=900
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
