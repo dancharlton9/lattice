@@ -36,14 +36,19 @@
       min-height: 100vh;
     }
 
-    .app {
-      display: grid;
-      grid-template-columns: 1fr;
-      min-height: 100vh;
+    /* Themed scrollbars */
+    * { scrollbar-width: thin; scrollbar-color: var(--bg-surface) transparent; }
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb {
+      background: var(--bg-surface);
+      border-radius: 5px;
+      border: 2px solid var(--bg-secondary);
     }
+    ::-webkit-scrollbar-thumb:hover { background: var(--bg-hover); }
 
-    .app.reader-open {
-      grid-template-columns: 1fr 1fr;
+    .app {
+      min-height: 100vh;
     }
 
     /* Feed panel */
@@ -52,13 +57,10 @@
       width: 100%;
       margin: 0 auto;
       padding: 24px;
-      overflow-y: auto;
-      max-height: 100vh;
     }
 
     .app.reader-open .feed-panel {
-      max-width: 100%;
-      border-right: 1px solid var(--border);
+      display: none;
     }
 
     /* Header */
@@ -385,8 +387,6 @@
     /* Reader panel */
     .reader-panel {
       background: var(--bg-secondary);
-      overflow-y: auto;
-      max-height: 100vh;
       display: none;
     }
 
@@ -410,15 +410,43 @@
       font-size: 12px;
       font-family: 'JetBrains Mono', monospace;
       color: var(--accent-blue);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .reader-header .reader-spacer {
       flex: 1;
     }
 
+    .reader-nav {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .reader-position {
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-muted);
+      min-width: 52px;
+      text-align: center;
+    }
+
+    .icon-btn:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+
+    .icon-btn:disabled:hover {
+      background: var(--bg-surface);
+      color: var(--text-secondary);
+    }
+
     .reader-body {
       padding: 32px 40px;
-      max-width: 720px;
+      max-width: 760px;
+      margin: 0 auto;
     }
 
     .reader-body .reader-title {
@@ -592,18 +620,15 @@
     }
 
     /* Responsive */
-    @media (max-width: 1024px) {
-      .app.reader-open { grid-template-columns: 1fr; }
-      .app.reader-open .feed-panel { display: none; }
-      .reader-panel { position: fixed; inset: 0; z-index: 100; }
-    }
-
     @media (max-width: 768px) {
       .feed-panel { padding: 16px; }
       .feed-item { grid-template-columns: 32px 1fr; padding: 12px 14px; }
       .feed-item .item-actions { display: none; }
       .stats-row { grid-template-columns: repeat(2, 1fr); }
       .reader-body { padding: 20px; }
+      .reader-header { padding: 10px 14px; gap: 8px; }
+      .reader-position { min-width: 0; font-size: 10px; }
+      .reader-header .reader-source { font-size: 11px; }
     }
 
     /* Embeddable iframe mode */
@@ -658,11 +683,20 @@
 
     <div class="reader-panel" id="readerPanel">
       <div class="reader-header">
-        <button class="icon-btn" onclick="closeReader()" title="Close reader">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        <button class="icon-btn" onclick="closeReader()" title="Back to feed">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
         </button>
         <span class="reader-source" id="readerSource"></span>
         <span class="reader-spacer"></span>
+        <div class="reader-nav">
+          <button class="icon-btn" id="prevBtn" onclick="gotoPrev()" title="Previous article (←)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <span class="reader-position" id="readerPosition"></span>
+          <button class="icon-btn" id="nextBtn" onclick="gotoNext()" title="Next article (→)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        </div>
         <button class="icon-btn" onclick="openExternal()" title="Open in browser">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
         </button>
@@ -704,6 +738,8 @@
     let searchTimer = null;
     let activeItemId = null;
     let currentReaderUrl = '';
+    let feedScrollY = 0;
+    let readerRequestId = 0;
 
     // Embedded mode
     if (new URLSearchParams(location.search).has('embed')) {
@@ -729,6 +765,9 @@
         renderFeed();
         updateStatus(data);
         renderErrors(data.errors);
+        if (document.getElementById('app').classList.contains('reader-open')) {
+          updateReaderNav();
+        }
       } catch (e) {
         document.getElementById('feed').innerHTML =
           '<div class="loading">Failed to load feed. Is the server running?</div>';
@@ -745,7 +784,7 @@
       }
 
       container.innerHTML = items.map(item => `
-        <div class="feed-item ${item.id === activeItemId ? 'active' : ''}" onclick="openArticle('${escAttr(item.id)}', '${escAttr(item.link)}', '${escAttr(item.source)}', '${escAttr(item.title)}', '${escAttr(item.icon)}')">
+        <div class="feed-item ${item.id === activeItemId ? 'active' : ''}" onclick="openArticle('${escAttr(item.id)}')">
           <div class="source-icon">${getIcon(item.icon)}</div>
           <div class="content">
             <div class="title">${escHtml(item.title)}</div>
@@ -777,51 +816,90 @@
       renderFeed();
     }
 
-    // Reader view
-    async function openArticle(id, url, source, title, icon) {
+    // Reader view — hash-routed as #article/<id>
+    function openArticle(id) {
+      const target = `#article/${encodeURIComponent(id)}`;
+      if (location.hash === target) return;
+      if (!location.hash.startsWith('#article/')) {
+        feedScrollY = window.scrollY;
+      }
+      location.hash = target;
+    }
+
+    function gotoPrev() {
+      const idx = allItems.findIndex(i => i.id === activeItemId);
+      if (idx > 0) openArticle(allItems[idx - 1].id);
+    }
+
+    function gotoNext() {
+      const idx = allItems.findIndex(i => i.id === activeItemId);
+      if (idx >= 0 && idx < allItems.length - 1) openArticle(allItems[idx + 1].id);
+    }
+
+    function updateReaderNav() {
+      const idx = allItems.findIndex(i => i.id === activeItemId);
+      const prevBtn = document.getElementById('prevBtn');
+      const nextBtn = document.getElementById('nextBtn');
+      const pos = document.getElementById('readerPosition');
+      prevBtn.disabled = idx <= 0;
+      nextBtn.disabled = idx < 0 || idx >= allItems.length - 1;
+      pos.textContent = idx >= 0 ? `${idx + 1} / ${allItems.length}` : '';
+    }
+
+    async function showArticle(id) {
+      const item = allItems.find(i => i.id === id);
+      if (!item) return;
+
       activeItemId = id;
-      currentReaderUrl = url;
-      renderFeed(); // highlight active
+      currentReaderUrl = item.link;
+      const requestId = ++readerRequestId;
 
-      const app = document.getElementById('app');
-      app.classList.add('reader-open');
-
-      document.getElementById('readerSource').textContent = source;
+      document.getElementById('app').classList.add('reader-open');
+      document.getElementById('readerSource').textContent = item.source;
       document.getElementById('readerBody').innerHTML = `
         <div class="reader-loading">
           <div class="spinner"></div>
           Loading article...
         </div>`;
+      updateReaderNav();
+      window.scrollTo(0, 0);
 
-      // First try to get full content from RSS cache
+      // First try full content from RSS cache
       try {
         const articleRes = await fetch(`/api/article/${id}`);
+        if (requestId !== readerRequestId) return;
         if (articleRes.ok) {
           const article = await articleRes.json();
+          if (requestId !== readerRequestId) return;
           if (article.fullContent && article.fullContent.length > 200) {
-            renderReaderContent(article.title, source, article.fullContent, url);
+            renderReaderContent(article.title, item.source, article.fullContent);
             return;
           }
         }
       } catch (e) {}
 
+      if (requestId !== readerRequestId) return;
+
       // Fallback: fetch from URL via proxy
       try {
-        const res = await fetch(`/api/content?url=${encodeURIComponent(url)}`);
+        const res = await fetch(`/api/content?url=${encodeURIComponent(item.link)}`);
+        if (requestId !== readerRequestId) return;
         const data = await res.json();
-        renderReaderContent(data.title || title, source, data.content, url);
+        if (requestId !== readerRequestId) return;
+        renderReaderContent(data.title || item.title, item.source, data.content);
       } catch (e) {
+        if (requestId !== readerRequestId) return;
         document.getElementById('readerBody').innerHTML = `
           <div class="reader-body">
-            <h2 class="reader-title">${escHtml(title)}</h2>
+            <h2 class="reader-title">${escHtml(item.title)}</h2>
             <p style="color: var(--text-muted)">Could not load article content.
-              <a href="${escAttr(url)}" target="_blank" rel="noopener" style="color: var(--accent-blue)">Open in browser</a>
+              <a href="${escAttr(item.link)}" target="_blank" rel="noopener" style="color: var(--accent-blue)">Open in browser</a>
             </p>
           </div>`;
       }
     }
 
-    function renderReaderContent(title, source, content, url) {
+    function renderReaderContent(title, source, content) {
       document.getElementById('readerBody').innerHTML = `
         <div class="reader-body">
           <h1 class="reader-title">${escHtml(title)}</h1>
@@ -832,12 +910,39 @@
         </div>`;
     }
 
-    function closeReader() {
+    function hideReader() {
+      readerRequestId++;
       document.getElementById('app').classList.remove('reader-open');
       activeItemId = null;
       currentReaderUrl = '';
       renderFeed();
+      window.scrollTo(0, feedScrollY);
     }
+
+    function closeReader() {
+      if (location.hash.startsWith('#article/')) {
+        if (history.length > 1) {
+          history.back();
+        } else {
+          history.replaceState(null, '', location.pathname + location.search);
+          hideReader();
+        }
+      } else {
+        hideReader();
+      }
+    }
+
+    function handleRoute() {
+      const m = location.hash.match(/^#article\/(.+)$/);
+      if (m) {
+        const id = decodeURIComponent(m[1]);
+        if (id !== activeItemId) showArticle(id);
+      } else {
+        hideReader();
+      }
+    }
+
+    window.addEventListener('hashchange', handleRoute);
 
     function openExternal() {
       if (currentReaderUrl) window.open(currentReaderUrl, '_blank');
@@ -845,7 +950,11 @@
 
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') closeReader();
+      if (e.target.matches('input, textarea')) return;
+      const readerOpen = document.getElementById('app').classList.contains('reader-open');
+      if (e.key === 'Escape' && readerOpen) { closeReader(); e.preventDefault(); }
+      else if (e.key === 'ArrowLeft' && readerOpen) { gotoPrev(); e.preventDefault(); }
+      else if (e.key === 'ArrowRight' && readerOpen) { gotoNext(); e.preventDefault(); }
     });
 
     function updateStatus(data) {
@@ -944,7 +1053,7 @@
     // Init
     loadStats();
     loadFilters();
-    loadFeed();
+    loadFeed().then(() => handleRoute());
     setInterval(() => { loadFeed(); loadStats(); }, 300000);
   </script>
 </body>
