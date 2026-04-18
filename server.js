@@ -4,6 +4,8 @@ const cheerio = require('cheerio');
 const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 
 const db = require('./db');
 const clusterer = require('./cluster');
@@ -13,9 +15,46 @@ const ai = require('./ai');
 const app = express();
 
 // Behind Azure Container Apps (or any HTTPS-terminating ingress) so we can
-// trust X-Forwarded-Proto for the Secure cookie flag.
+// trust X-Forwarded-Proto for the Secure cookie flag + real client IP for
+// rate limiting.
 app.set('trust proxy', true);
-app.use(express.json());
+
+// Security headers. The app inlines <style> + <script> in index.html, so CSP
+// must allow 'unsafe-inline' for both; article-image hosts are arbitrary, so
+// imgSrc is permissive. HSTS is on by default when served over HTTPS.
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", 'data:', 'https:'],
+      connectSrc: ["'self'"],
+      frameAncestors: ["'self'"],
+    },
+  },
+  crossOriginEmbedderPolicy: false, // allow cross-origin article images
+}));
+
+app.use(express.json({ limit: '128kb' }));
+
+// Rate limits. Container Apps passes the real client IP via X-Forwarded-For,
+// which trust-proxy gives us through req.ip.
+const apiLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => req.path === '/api/health',
+});
+const expensiveLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api/', apiLimiter);
 
 // Anonymous per-visitor identity. Read/saved state is scoped to this id.
 // The cookie is HttpOnly so only the server reads it, sent automatically on
@@ -319,8 +358,8 @@ app.post('/api/article/:id/save', async (req, res) => {
   res.json({ ok: true, saved });
 });
 
-// AI features (optional)
-app.post('/api/article/:id/summary', async (req, res) => {
+// AI features (optional) — tight rate limit because every call costs money.
+app.post('/api/article/:id/summary', expensiveLimiter, async (req, res) => {
   if (!ai.enabled) return res.status(501).json({ error: 'AI disabled — set ANTHROPIC_API_KEY' });
   const row = await db.getArticle(req.params.id);
   if (!row) return res.status(404).json({ error: 'Not found' });
@@ -347,11 +386,21 @@ app.get('/api/digest', async (req, res) => {
   }
 });
 
-// Reader-view content extraction via Readability
-app.get('/api/content', async (req, res) => {
+// Reader-view content extraction via Readability.
+// SSRF guard: we only proxy URLs we already have in articles table. That
+// restricts the surface to URLs published by our configured RSS feeds,
+// and rejects arbitrary external/internal targets.
+app.get('/api/content', expensiveLimiter, async (req, res) => {
   const { url } = req.query;
   if (!url) return res.status(400).json({ error: 'URL required' });
-  try { new URL(url); } catch { return res.status(400).json({ error: 'Invalid URL' }); }
+  let parsed;
+  try { parsed = new URL(url); } catch { return res.status(400).json({ error: 'Invalid URL' }); }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return res.status(400).json({ error: 'Only http(s) allowed' });
+  }
+  if (!(await db.articleByLink(url))) {
+    return res.status(403).json({ error: 'URL is not part of any ingested feed' });
+  }
 
   const cached = await db.getExtracted(url);
   if (cached && Date.now() - Number(cached.fetched_at) < EXTRACT_CACHE_MS) {
@@ -457,11 +506,14 @@ app.get('/api/health', async (req, res) => {
 });
 
 // Start server (init DB before accepting traffic)
+let httpServer;
+let shuttingDown = false;
+
 async function main() {
   await db.init();
   loadFeeds();
   const PORT = process.env.PORT || 3000;
-  app.listen(PORT, '0.0.0.0', () => {
+  httpServer = app.listen(PORT, '0.0.0.0', () => {
     console.log(`Lattice running on port ${PORT} (AI ${ai.enabled ? 'enabled' : 'disabled'})`);
     scheduleFeeds().catch(e => console.error('scheduleFeeds failed:', e));
   });
@@ -475,6 +527,37 @@ async function main() {
     scheduleFeeds().catch(e => console.error('scheduleFeeds failed:', e));
   });
 }
+
+// Graceful shutdown: stop taking requests, drain in-flight, close DB pool.
+async function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`${signal} received, shutting down...`);
+
+  for (const timer of feedTimers.values()) clearInterval(timer);
+
+  const forceExit = setTimeout(() => {
+    console.error('Shutdown timed out after 15s, forcing exit.');
+    process.exit(1);
+  }, 15_000);
+  forceExit.unref();
+
+  try {
+    await new Promise((resolve, reject) => {
+      if (!httpServer) return resolve();
+      httpServer.close(err => err ? reject(err) : resolve());
+    });
+    await db.close();
+    console.log('Shutdown complete.');
+    process.exit(0);
+  } catch (e) {
+    console.error('Shutdown error:', e);
+    process.exit(1);
+  }
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
 main().catch(err => {
   console.error('Fatal:', err);

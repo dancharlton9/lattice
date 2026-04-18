@@ -110,6 +110,13 @@ async function getArticle(id) {
   return rows[0] || null;
 }
 
+async function articleByLink(link) {
+  const { rows } = await pool.query(
+    `SELECT id FROM articles WHERE link = $1 LIMIT 1`, [link]
+  );
+  return rows[0] || null;
+}
+
 async function getArticleState(userId, id) {
   const { rows } = await pool.query(
     `SELECT read_at, saved_at FROM article_state WHERE user_id = $1 AND article_id = $2`,
@@ -371,6 +378,7 @@ module.exports = {
   close,
   upsertArticle,
   getArticle,
+  articleByLink,
   getArticleState,
   markRead,
   markSaved,

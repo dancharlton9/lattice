@@ -33,6 +33,15 @@ SUBSCRIPTION="${SUBSCRIPTION:-DCWD}"
 GITHUB_REPO="${GITHUB_REPO:?GITHUB_REPO=owner/name is required}"
 GITHUB_BRANCH="${GITHUB_BRANCH:-master}"
 
+# GitHub presents the canonical owner/repo casing in the OIDC token, and
+# Azure AD matches the federated-credential subject case-sensitively. If the
+# repo is public, ask the API for the real casing so we don't trip over it.
+CANONICAL_REPO=$(curl -sfS "https://api.github.com/repos/${GITHUB_REPO}" 2>/dev/null | jq -r '.full_name // empty' || true)
+if [[ -n "$CANONICAL_REPO" && "$CANONICAL_REPO" != "$GITHUB_REPO" ]]; then
+  printf '\033[1;33m!\033[0m Normalising GITHUB_REPO case: %s -> %s\n' "$GITHUB_REPO" "$CANONICAL_REPO"
+  GITHUB_REPO="$CANONICAL_REPO"
+fi
+
 RG="${PRODUCT}-${ENV_NAME}-rg"
 LAW="${PRODUCT}-${ENV_NAME}-law"
 # ACR: globally unique, alphanumeric only (no hyphens allowed).
@@ -218,6 +227,46 @@ log "Granting GitHub app AcrPush on $ACR + Contributor on $RG..."
 az role assignment create --assignee "$APP_REG_ID" --role AcrPush --scope "$ACR_ID" >/dev/null 2>&1 || true
 az role assignment create --assignee "$APP_REG_ID" --role Contributor --scope "/subscriptions/${SUB_ID}/resourceGroups/${RG}" >/dev/null 2>&1 || true
 ok "Role assignments done"
+
+# ---- Optional: alerts ------------------------------------------------------
+# Set ALERT_EMAIL=you@example.com when running the script to wire up basic
+# health alerts. Skipped otherwise (you can add them later via az CLI).
+if [[ -n "${ALERT_EMAIL:-}" ]]; then
+  ACTION_GROUP="${PRODUCT}-${ENV_NAME}-ag"
+  log "Creating action group $ACTION_GROUP (email: $ALERT_EMAIL)..."
+  if ! az monitor action-group show -g "$RG" -n "$ACTION_GROUP" >/dev/null 2>&1; then
+    az monitor action-group create \
+      -g "$RG" -n "$ACTION_GROUP" \
+      --short-name "${PRODUCT:0:12}" \
+      --action email primary "$ALERT_EMAIL" >/dev/null
+  fi
+  ACTION_GROUP_ID=$(az monitor action-group show -g "$RG" -n "$ACTION_GROUP" --query id -o tsv)
+
+  APP_ID=$(az containerapp show -g "$RG" -n "$APP" --query id -o tsv)
+  DB_ID=$(az postgres flexible-server show -g "$RG" -n "$DB_SERVER" --query id -o tsv)
+
+  log "Creating alert: Container App has no running replicas..."
+  az monitor metrics alert create \
+    -g "$RG" -n "${APP}-no-replicas" \
+    --scopes "$APP_ID" \
+    --condition "avg Replicas < 1" \
+    --description "Lattice container app has no running replicas" \
+    --window-size 5m --evaluation-frequency 1m \
+    --severity 2 \
+    --action "$ACTION_GROUP_ID" >/dev/null 2>&1 || true
+
+  log "Creating alert: Postgres CPU > 80%..."
+  az monitor metrics alert create \
+    -g "$RG" -n "${DB_SERVER}-cpu-high" \
+    --scopes "$DB_ID" \
+    --condition "avg cpu_percent > 80" \
+    --description "Postgres CPU sustained above 80%" \
+    --window-size 10m --evaluation-frequency 5m \
+    --severity 3 \
+    --action "$ACTION_GROUP_ID" >/dev/null 2>&1 || true
+
+  ok "Alerts wired (email: $ALERT_EMAIL)"
+fi
 
 # ---- Summary --------------------------------------------------------------
 cat <<EOF
