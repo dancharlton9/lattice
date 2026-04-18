@@ -287,7 +287,17 @@ function decorateRow(row) {
 
 // Serve static files. Branding/favicon assets live at /assets but also at the
 // root (so /favicon.svg, /site.webmanifest etc resolve without rewriting).
-app.use(express.static(path.join(__dirname, 'public')));
+// index.html is no-cache so deploys are picked up immediately; everything
+// else gets a short cache TTL.
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    } else {
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+    }
+  },
+}));
 app.use('/assets', express.static(path.join(__dirname, 'assets'), { maxAge: '7d' }));
 app.use(express.static(path.join(__dirname, 'assets'), { maxAge: '7d' }));
 
