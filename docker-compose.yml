@@ -9,9 +9,12 @@ services:
       - "3000"
     volumes:
       - ./feeds.json:/app/feeds.json:ro
+      - lattice-data:/app/data
     environment:
       - PORT=3000
-      - CACHE_TTL=900
+      - DB_PATH=/app/data/lattice.db
+      # Optional: set ANTHROPIC_API_KEY to enable AI summaries / digest.
+      # - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
     networks:
       proxy:
     labels:
@@ -30,3 +33,6 @@ services:
 networks:
   proxy:
     external: true
+
+volumes:
+  lattice-data:

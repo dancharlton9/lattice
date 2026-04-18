@@ -619,6 +619,168 @@
       color: var(--text-primary);
     }
 
+    /* Read / saved / selected states on feed items */
+    .feed-item.read .title { color: var(--text-muted); font-weight: 300; }
+    .feed-item.read .summary { opacity: 0.6; }
+    .feed-item.read .source-icon { opacity: 0.5; }
+
+    .feed-item.selected {
+      outline: 2px solid var(--accent-blue);
+      outline-offset: -2px;
+    }
+
+    .saved-indicator {
+      color: var(--accent-yellow);
+      width: 12px;
+      height: 12px;
+      flex-shrink: 0;
+    }
+
+    .related-badge {
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      background: rgba(148, 226, 213, 0.12);
+      color: var(--accent-teal);
+      white-space: nowrap;
+    }
+
+    /* New-articles notification banner */
+    .new-banner {
+      position: sticky;
+      top: 8px;
+      z-index: 20;
+      margin: 0 auto 12px;
+      padding: 10px 16px;
+      background: linear-gradient(90deg, rgba(137,180,250,0.2), rgba(203,166,247,0.2));
+      border: 1px solid var(--accent-blue);
+      border-radius: 24px;
+      color: var(--text-primary);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+      animation: slide-in 0.25s ease-out;
+    }
+    .new-banner:hover { background: linear-gradient(90deg, rgba(137,180,250,0.3), rgba(203,166,247,0.3)); }
+    .new-banner svg { width: 14px; height: 14px; color: var(--accent-blue); }
+    @keyframes slide-in { from { transform: translateY(-10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+    /* Filter group */
+    .filter-group {
+      display: flex;
+      gap: 0;
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      overflow: hidden;
+    }
+    .filter-group .seg {
+      padding: 8px 14px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      border: none;
+      background: transparent;
+      font-family: 'Outfit', sans-serif;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .filter-group .seg:hover { color: var(--text-primary); }
+    .filter-group .seg.active {
+      background: var(--accent-blue);
+      color: var(--bg-primary);
+      font-weight: 500;
+    }
+
+    /* Feed health panel */
+    .stat-card.clickable { cursor: pointer; transition: border-color 0.15s; }
+    .stat-card.clickable:hover { border-color: var(--accent-blue); }
+
+    .health-panel {
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      margin-bottom: 16px;
+    }
+    .health-panel h3 {
+      font-size: 12px;
+      font-family: 'JetBrains Mono', monospace;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+    .health-row {
+      display: grid;
+      grid-template-columns: 12px 1fr auto auto;
+      gap: 10px;
+      align-items: center;
+      padding: 4px 0;
+      font-size: 12px;
+    }
+    .health-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--text-muted);
+    }
+    .health-dot.ok { background: var(--accent-green); }
+    .health-dot.degraded { background: var(--accent-yellow); }
+    .health-dot.stale { background: var(--accent-peach); }
+    .health-dot.down { background: var(--accent-red); }
+    .health-row .src { color: var(--text-primary); }
+    .health-row .age { color: var(--text-muted); font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+    .health-row .cat { color: var(--accent-blue); font-family: 'JetBrains Mono', monospace; font-size: 10px; }
+
+    /* Reader action button (save/summary) */
+    .icon-btn.active { color: var(--accent-yellow); background: rgba(249, 226, 175, 0.12); }
+    .icon-btn.active:hover { background: rgba(249, 226, 175, 0.2); }
+
+    .ai-summary {
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent-mauve);
+      border-radius: var(--radius-sm);
+      padding: 14px 18px;
+      margin-bottom: 24px;
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--text-secondary);
+      white-space: pre-wrap;
+    }
+    .ai-summary .label {
+      font-size: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--accent-mauve);
+      margin-bottom: 6px;
+    }
+
+    .keyboard-hint {
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-muted);
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .keyboard-hint kbd {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: inherit;
+      color: var(--text-secondary);
+    }
+
     /* Responsive */
     @media (max-width: 768px) {
       .feed-panel { padding: 16px; }
@@ -629,6 +791,7 @@
       .reader-header { padding: 10px 14px; gap: 8px; }
       .reader-position { min-width: 0; font-size: 10px; }
       .reader-header .reader-source { font-size: 11px; }
+      .keyboard-hint { display: none; }
     }
 
     /* Embeddable iframe mode */
@@ -669,16 +832,31 @@
       <div class="stats-row" id="stats"></div>
 
       <div id="errors"></div>
+      <div id="healthPanel"></div>
 
       <div class="controls">
         <div class="search-box">
           <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           <input type="text" id="search" placeholder="Search articles..." oninput="debounceSearch()">
         </div>
+        <div class="filter-group" id="readFilter">
+          <button class="seg active" data-read="all" onclick="setReadFilter('all', this)">All</button>
+          <button class="seg" data-read="unread" onclick="setReadFilter('unread', this)">Unread</button>
+          <button class="seg" data-read="saved" onclick="setReadFilter('saved', this)">Saved</button>
+        </div>
         <div class="filter-pills" id="filters"></div>
       </div>
 
+      <div id="newBannerSlot"></div>
       <div class="feed-grid" id="feed"></div>
+
+      <div class="keyboard-hint" style="margin-top:16px">
+        <span><kbd>j</kbd>/<kbd>k</kbd> move</span>
+        <span><kbd>o</kbd>/<kbd>Enter</kbd> open</span>
+        <span><kbd>s</kbd> save</span>
+        <span><kbd>m</kbd> mark read</span>
+        <span><kbd>r</kbd> refresh</span>
+      </div>
     </div>
 
     <div class="reader-panel" id="readerPanel">
@@ -697,6 +875,12 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
           </button>
         </div>
+        <button class="icon-btn" id="summaryBtn" onclick="requestSummary()" title="AI summary" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+        </button>
+        <button class="icon-btn" id="saveBtn" onclick="toggleSaveActive()" title="Save (s)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        </button>
         <button class="icon-btn" onclick="openExternal()" title="Open in browser">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
         </button>
@@ -738,8 +922,15 @@
     let searchTimer = null;
     let activeItemId = null;
     let currentReaderUrl = '';
+    let currentReaderSaved = false;
     let feedScrollY = 0;
     let readerRequestId = 0;
+    let readFilter = 'all';              // all | unread | saved
+    let selectedIndex = -1;              // keyboard cursor in feed
+    let lastSeenMaxTs = 0;               // newest article ts the client has shown
+    let pendingNewCount = 0;
+    let healthPanelOpen = false;
+    let aiEnabled = false;
 
     // Embedded mode
     if (new URLSearchParams(location.search).has('embed')) {
@@ -756,15 +947,20 @@
       const params = new URLSearchParams({ limit: 200 });
       if (currentCategory) params.set('category', currentCategory);
       if (search) params.set('search', search);
+      if (readFilter === 'unread') params.set('read', 'false');
+      if (readFilter === 'saved') params.set('saved', 'true');
 
       try {
         const res = await fetch(`/api/feed?${params}`);
         const data = await res.json();
         allItems = data.items;
         displayCount = 30;
+        if (allItems.length) lastSeenMaxTs = Math.max(lastSeenMaxTs, allItems[0].timestamp);
+        if (selectedIndex >= allItems.length) selectedIndex = allItems.length - 1;
         renderFeed();
         updateStatus(data);
         renderErrors(data.errors);
+        hideNewBanner();
         if (document.getElementById('app').classList.contains('reader-open')) {
           updateReaderNav();
         }
@@ -783,25 +979,40 @@
         return;
       }
 
-      container.innerHTML = items.map(item => `
-        <div class="feed-item ${item.id === activeItemId ? 'active' : ''}" onclick="openArticle('${escAttr(item.id)}')">
-          <div class="source-icon">${getIcon(item.icon)}</div>
-          <div class="content">
-            <div class="title">${escHtml(item.title)}</div>
-            ${item.summary ? `<div class="summary">${escHtml(item.summary)}</div>` : ''}
-            <div class="meta">
-              <span class="source-name">${escHtml(item.source)}</span>
-              <span class="time">${timeAgo(item.timestamp)}</span>
-              <span class="category-tag cat-${item.category.toLowerCase()}">${item.category}</span>
+      container.innerHTML = items.map((item, idx) => {
+        const classes = ['feed-item'];
+        if (item.id === activeItemId) classes.push('active');
+        if (item.read) classes.push('read');
+        if (idx === selectedIndex) classes.push('selected');
+        const related = (item.relatedSources || []).length;
+        return `
+          <div class="${classes.join(' ')}" data-index="${idx}" data-id="${escAttr(item.id)}" onclick="openArticle('${escAttr(item.id)}')">
+            <div class="source-icon">${getIcon(item.icon)}</div>
+            <div class="content">
+              <div class="title">${escHtml(item.title)}</div>
+              ${item.summary ? `<div class="summary">${escHtml(item.summary)}</div>` : ''}
+              <div class="meta">
+                <span class="source-name">${escHtml(item.source)}</span>
+                <span class="time">${timeAgo(item.timestamp)}</span>
+                <span class="category-tag cat-${item.category.toLowerCase()}">${item.category}</span>
+                ${related ? `<span class="related-badge" title="Also covered by: ${escAttr((item.relatedSources || []).join(', '))}">+${related} related</span>` : ''}
+                ${item.saved ? `<svg class="saved-indicator" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>` : ''}
+              </div>
+            </div>
+            <div class="item-actions">
+              <button class="item-action-btn" onclick="event.stopPropagation(); toggleSave('${escAttr(item.id)}')" title="${item.saved ? 'Unsave' : 'Save'} (s)">
+                <svg viewBox="0 0 24 24" fill="${item.saved ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              </button>
+              <button class="item-action-btn" onclick="event.stopPropagation(); toggleRead('${escAttr(item.id)}')" title="${item.read ? 'Mark unread' : 'Mark read'} (m)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              </button>
+              <button class="item-action-btn" onclick="event.stopPropagation(); window.open('${escAttr(item.link)}', '_blank')" title="Open in new tab">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+              </button>
             </div>
           </div>
-          <div class="item-actions">
-            <button class="item-action-btn" onclick="event.stopPropagation(); window.open('${escAttr(item.link)}', '_blank')" title="Open in new tab">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-            </button>
-          </div>
-        </div>
-      `).join('');
+        `;
+      }).join('');
 
       if (allItems.length > displayCount) {
         container.innerHTML += `
@@ -814,6 +1025,62 @@
     function loadMore() {
       displayCount += 30;
       renderFeed();
+    }
+
+    // Local state mutation helpers (optimistic)
+    function updateLocalItem(id, patch) {
+      const item = allItems.find(i => i.id === id);
+      if (item) Object.assign(item, patch);
+    }
+
+    async function toggleRead(id) {
+      const item = allItems.find(i => i.id === id);
+      if (!item) return;
+      const newState = !item.read;
+      updateLocalItem(id, { read: newState });
+      renderFeed();
+      try {
+        await fetch(`/api/article/${id}/read`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ read: newState }),
+        });
+      } catch (e) {
+        updateLocalItem(id, { read: !newState });
+        renderFeed();
+      }
+    }
+
+    async function toggleSave(id) {
+      const item = allItems.find(i => i.id === id);
+      if (!item) return;
+      const newState = !item.saved;
+      updateLocalItem(id, { saved: newState });
+      renderFeed();
+      if (id === activeItemId) setReaderSaved(newState);
+      try {
+        await fetch(`/api/article/${id}/save`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ saved: newState }),
+        });
+      } catch (e) {
+        updateLocalItem(id, { saved: !newState });
+        renderFeed();
+        if (id === activeItemId) setReaderSaved(!newState);
+      }
+    }
+
+    function toggleSaveActive() {
+      if (activeItemId) toggleSave(activeItemId);
+    }
+
+    function setReaderSaved(saved) {
+      currentReaderSaved = saved;
+      const btn = document.getElementById('saveBtn');
+      btn.classList.toggle('active', !!saved);
+      btn.title = saved ? 'Unsave (s)' : 'Save (s)';
+      btn.querySelector('svg').setAttribute('fill', saved ? 'currentColor' : 'none');
     }
 
     // Reader view — hash-routed as #article/<id>
@@ -854,6 +1121,18 @@
       currentReaderUrl = item.link;
       const requestId = ++readerRequestId;
 
+      // Auto-mark read
+      if (!item.read) {
+        updateLocalItem(id, { read: true });
+        fetch(`/api/article/${id}/read`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ read: true }),
+        }).catch(() => updateLocalItem(id, { read: false }));
+      }
+
+      setReaderSaved(!!item.saved);
+      document.getElementById('summaryBtn').hidden = !aiEnabled;
       document.getElementById('app').classList.add('reader-open');
       document.getElementById('readerSource').textContent = item.source;
       document.getElementById('readerBody').innerHTML = `
@@ -865,28 +1144,27 @@
       window.scrollTo(0, 0);
 
       // First try full content from RSS cache
+      let article = null;
       try {
         const articleRes = await fetch(`/api/article/${id}`);
         if (requestId !== readerRequestId) return;
-        if (articleRes.ok) {
-          const article = await articleRes.json();
-          if (requestId !== readerRequestId) return;
-          if (article.fullContent && article.fullContent.length > 200) {
-            renderReaderContent(article.title, item.source, article.fullContent);
-            return;
-          }
-        }
+        if (articleRes.ok) article = await articleRes.json();
       } catch (e) {}
-
       if (requestId !== readerRequestId) return;
 
-      // Fallback: fetch from URL via proxy
+      if (article && article.fullContent && article.fullContent.length > 200) {
+        renderReaderContent(article.title || item.title, item.source, article.fullContent, article);
+        return;
+      }
+
+      // Fallback: fetch from URL via proxy (Readability)
       try {
         const res = await fetch(`/api/content?url=${encodeURIComponent(item.link)}`);
         if (requestId !== readerRequestId) return;
         const data = await res.json();
         if (requestId !== readerRequestId) return;
-        renderReaderContent(data.title || item.title, item.source, data.content);
+        const merged = { ...(article || {}), byline: data.byline, siteName: data.siteName };
+        renderReaderContent(data.title || item.title, item.source, data.content, merged);
       } catch (e) {
         if (requestId !== readerRequestId) return;
         document.getElementById('readerBody').innerHTML = `
@@ -899,15 +1177,44 @@
       }
     }
 
-    function renderReaderContent(title, source, content) {
+    function renderReaderContent(title, source, content, meta) {
+      const byline = meta?.byline ? `<span>${escHtml(meta.byline)}</span>` : '';
+      const related = (meta?.relatedSources || []).filter(s => s !== source);
+      const relatedBadge = related.length
+        ? `<span class="related-badge" title="Also covered by">+${related.length} related: ${escHtml(related.join(', '))}</span>`
+        : '';
+      const aiSummary = meta?.summaryAi
+        ? `<div class="ai-summary"><div class="label">AI summary</div>${escHtml(meta.summaryAi)}</div>`
+        : '';
       document.getElementById('readerBody').innerHTML = `
         <div class="reader-body">
           <h1 class="reader-title">${escHtml(title)}</h1>
           <div class="reader-meta">
             <span>${escHtml(source)}</span>
+            ${byline}
+            ${relatedBadge}
           </div>
+          ${aiSummary}
           <div class="reader-content">${content}</div>
         </div>`;
+    }
+
+    async function requestSummary() {
+      if (!activeItemId || !aiEnabled) return;
+      const btn = document.getElementById('summaryBtn');
+      btn.disabled = true;
+      try {
+        const res = await fetch(`/api/article/${activeItemId}/summary`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+        const data = await res.json();
+        if (data.summary) {
+          // Re-show the article with the new summary merged in
+          const item = allItems.find(i => i.id === activeItemId);
+          const article = await fetch(`/api/article/${activeItemId}`).then(r => r.json());
+          renderReaderContent(article.title || item.title, item.source, article.fullContent || '', article);
+        }
+      } finally {
+        btn.disabled = false;
+      }
     }
 
     function hideReader() {
@@ -951,15 +1258,62 @@
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
       if (e.target.matches('input, textarea')) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
       const readerOpen = document.getElementById('app').classList.contains('reader-open');
-      if (e.key === 'Escape' && readerOpen) { closeReader(); e.preventDefault(); }
-      else if (e.key === 'ArrowLeft' && readerOpen) { gotoPrev(); e.preventDefault(); }
-      else if (e.key === 'ArrowRight' && readerOpen) { gotoNext(); e.preventDefault(); }
+
+      if (readerOpen) {
+        if (e.key === 'Escape') { closeReader(); e.preventDefault(); }
+        else if (e.key === 'ArrowLeft' || e.key === 'k') { gotoPrev(); e.preventDefault(); }
+        else if (e.key === 'ArrowRight' || e.key === 'j') { gotoNext(); e.preventDefault(); }
+        else if (e.key === 's') { toggleSaveActive(); e.preventDefault(); }
+        return;
+      }
+
+      // Feed view shortcuts
+      if (e.key === 'j' || e.key === 'ArrowDown') { moveSelection(1); e.preventDefault(); }
+      else if (e.key === 'k' || e.key === 'ArrowUp') { moveSelection(-1); e.preventDefault(); }
+      else if (e.key === 'o' || e.key === 'Enter') { openSelected(); e.preventDefault(); }
+      else if (e.key === 's') { saveSelected(); e.preventDefault(); }
+      else if (e.key === 'm') { markSelected(); e.preventDefault(); }
+      else if (e.key === 'r') { refresh(); e.preventDefault(); }
+      else if (e.key === '/') { document.getElementById('search').focus(); e.preventDefault(); }
+      else if (e.key === 'Escape') { document.getElementById('search').blur(); }
     });
 
+    function moveSelection(delta) {
+      const visible = Math.min(displayCount, allItems.length);
+      if (!visible) return;
+      if (selectedIndex < 0) selectedIndex = delta > 0 ? 0 : visible - 1;
+      else selectedIndex = Math.max(0, Math.min(visible - 1, selectedIndex + delta));
+      renderFeed();
+      const el = document.querySelector(`.feed-item[data-index="${selectedIndex}"]`);
+      if (el) el.scrollIntoView({ block: 'nearest' });
+    }
+
+    function currentSelection() {
+      if (selectedIndex < 0 || selectedIndex >= allItems.length) return null;
+      return allItems[selectedIndex];
+    }
+
+    function openSelected() {
+      const item = currentSelection();
+      if (item) openArticle(item.id);
+    }
+
+    function saveSelected() {
+      const item = currentSelection();
+      if (item) toggleSave(item.id);
+    }
+
+    function markSelected() {
+      const item = currentSelection();
+      if (item) toggleRead(item.id);
+    }
+
     function updateStatus(data) {
-      document.getElementById('status').textContent =
-        `${data.total} articles`;
+      const unread = allItems.filter(i => !i.read).length;
+      const el = document.getElementById('status');
+      el.textContent = `${data.total} articles · ${unread} unread`;
     }
 
     function renderErrors(errors) {
@@ -979,22 +1333,23 @@
       try {
         const res = await fetch('/api/stats');
         const stats = await res.json();
+        aiEnabled = !!stats.aiEnabled;
         document.getElementById('stats').innerHTML = `
           <div class="stat-card">
             <div class="label">Sources</div>
             <div class="value blue">${stats.feedCount}</div>
           </div>
           <div class="stat-card">
+            <div class="label">Unread</div>
+            <div class="value green">${stats.unreadCount ?? 0}</div>
+          </div>
+          <div class="stat-card">
             <div class="label">Articles</div>
-            <div class="value green">${stats.itemCount}</div>
+            <div class="value mauve">${stats.itemCount}</div>
           </div>
-          <div class="stat-card">
-            <div class="label">Categories</div>
-            <div class="value mauve">${stats.categories?.length || 0}</div>
-          </div>
-          <div class="stat-card">
+          <div class="stat-card clickable" onclick="toggleHealthPanel()" title="Click for feed health">
             <div class="label">Errors</div>
-            <div class="value peach">${stats.errors?.length || 0}</div>
+            <div class="value ${stats.errors?.length ? 'peach' : 'green'}">${stats.errors?.length || 0}</div>
           </div>
         `;
       } catch (e) {}
@@ -1017,8 +1372,17 @@
 
     function setCategory(cat, el) {
       currentCategory = cat;
-      document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.filter-pills .pill').forEach(p => p.classList.remove('active'));
       el.classList.add('active');
+      selectedIndex = -1;
+      loadFeed();
+    }
+
+    function setReadFilter(val, el) {
+      readFilter = val;
+      document.querySelectorAll('#readFilter .seg').forEach(p => p.classList.remove('active'));
+      el.classList.add('active');
+      selectedIndex = -1;
       loadFeed();
     }
 
@@ -1027,6 +1391,78 @@
         '<div class="loading"><div class="spinner"></div>Refreshing feeds...</div>';
       loadFeed();
       loadStats();
+      loadFeedHealth();
+    }
+
+    // --- Background refresh + new-articles banner ---
+    async function pollNewCount() {
+      if (!lastSeenMaxTs) return;
+      try {
+        const res = await fetch(`/api/new-count?since=${lastSeenMaxTs}`);
+        const data = await res.json();
+        if (data.count > 0 && data.count !== pendingNewCount) {
+          pendingNewCount = data.count;
+          showNewBanner(data.count);
+        }
+      } catch (e) {}
+    }
+
+    function showNewBanner(count) {
+      const slot = document.getElementById('newBannerSlot');
+      slot.innerHTML = `
+        <div class="new-banner" onclick="applyPendingNew()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          <span>${count} new article${count === 1 ? '' : 's'} — click to load</span>
+        </div>`;
+    }
+
+    function hideNewBanner() {
+      pendingNewCount = 0;
+      document.getElementById('newBannerSlot').innerHTML = '';
+    }
+
+    function applyPendingNew() {
+      hideNewBanner();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      loadFeed();
+      loadStats();
+    }
+
+    // --- Feed health panel ---
+    async function loadFeedHealth() {
+      try {
+        const res = await fetch('/api/feed-health');
+        const health = await res.json();
+        window._lastHealth = health;
+        if (healthPanelOpen) renderHealthPanel();
+      } catch (e) {}
+    }
+
+    function toggleHealthPanel() {
+      healthPanelOpen = !healthPanelOpen;
+      if (healthPanelOpen) renderHealthPanel();
+      else document.getElementById('healthPanel').innerHTML = '';
+    }
+
+    function renderHealthPanel() {
+      const health = window._lastHealth || [];
+      const now = Date.now();
+      const rows = health.map(h => {
+        const age = h.lastSuccess ? timeAgo(h.lastSuccess) : 'never';
+        return `
+          <div class="health-row" title="${escAttr(h.lastError || '')}">
+            <div class="health-dot ${h.status}"></div>
+            <div class="src">${escHtml(h.name)} <span class="cat">${escHtml(h.category || '')}</span></div>
+            <div class="age">${h.itemCount || 0} items</div>
+            <div class="age">${age}</div>
+          </div>
+        `;
+      }).join('');
+      document.getElementById('healthPanel').innerHTML = `
+        <div class="health-panel">
+          <h3>Feed health</h3>
+          ${rows || '<div style="color:var(--text-muted); font-size:12px;">No data yet.</div>'}
+        </div>`;
     }
 
     function timeAgo(ts) {
@@ -1053,8 +1489,13 @@
     // Init
     loadStats();
     loadFilters();
+    loadFeedHealth();
     loadFeed().then(() => handleRoute());
-    setInterval(() => { loadFeed(); loadStats(); }, 300000);
+
+    // Server refreshes feeds on its own per-feed schedule; client just polls
+    // for new-article counts and periodically refreshes stats + health.
+    setInterval(pollNewCount, 60 * 1000);
+    setInterval(() => { loadStats(); loadFeedHealth(); }, 5 * 60 * 1000);
   </script>
 </body>
 </html>
