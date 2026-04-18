@@ -37,6 +37,10 @@
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
+    /* The `hidden` attribute loses to any explicit `display:` later in CSS.
+       Force it to actually hide the element regardless of component styles. */
+    [hidden] { display: none !important; }
+
     body {
       font-family: 'Outfit', sans-serif;
       background: var(--bg-secondary);
