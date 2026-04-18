@@ -87,13 +87,42 @@
       gap: 10px;
     }
 
-    .logo {
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: inherit;
+    }
+    .brand-mark {
       height: 36px;
-      width: auto;
+      width: 36px;
       display: block;
     }
+    .brand-text {
+      display: flex;
+      flex-direction: column;
+      line-height: 1;
+    }
+    .brand-name {
+      font-family: 'Outfit', sans-serif;
+      font-size: 24px;
+      font-weight: 400;
+      letter-spacing: -0.03em;
+      color: var(--text-primary);
+    }
+    .brand-tagline {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.2em;
+      color: var(--accent-teal);
+      margin-top: 4px;
+      opacity: 0.75;
+    }
     @media (max-width: 768px) {
-      .logo { height: 30px; }
+      .brand-mark { height: 30px; width: 30px; }
+      .brand-name { font-size: 20px; }
+      .brand-tagline { font-size: 9px; }
     }
 
     .meta-bar {
@@ -808,8 +837,12 @@
     <div class="feed-panel" id="feedPanel">
       <div class="header">
         <div class="header-left">
-          <a href="/" aria-label="Lattice home">
-            <img class="logo" src="/lattice-wordmark-mocha.svg" alt="Lattice — AI News">
+          <a href="/" class="brand" aria-label="Lattice home">
+            <img class="brand-mark" src="/lattice-mark-mocha.svg" alt="">
+            <span class="brand-text">
+              <span class="brand-name">lattice</span>
+              <span class="brand-tagline">AI.NEWS</span>
+            </span>
           </a>
         </div>
         <div class="meta-bar">
