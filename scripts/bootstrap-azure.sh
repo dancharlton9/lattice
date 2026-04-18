@@ -61,6 +61,24 @@ SUB_ID=$(az account show --query id -o tsv)
 TENANT_ID=$(az account show --query tenantId -o tsv)
 log "Subscription: $SUBSCRIPTION ($SUB_ID)"
 
+# ---- Register required resource providers ----------------------------------
+# Fresh/unused subscriptions don't have these enabled. Idempotent.
+REQUIRED_PROVIDERS=(
+  Microsoft.OperationalInsights
+  Microsoft.ContainerRegistry
+  Microsoft.DBforPostgreSQL
+  Microsoft.App
+  Microsoft.Insights
+)
+for provider in "${REQUIRED_PROVIDERS[@]}"; do
+  state=$(az provider show --namespace "$provider" --query registrationState -o tsv 2>/dev/null || echo "NotRegistered")
+  if [[ "$state" != "Registered" ]]; then
+    log "Registering provider $provider (one-time, can take a minute)..."
+    az provider register --namespace "$provider" --wait >/dev/null
+  fi
+done
+ok "Resource providers registered"
+
 # ---- Resource group --------------------------------------------------------
 if ! az group show -n "$RG" >/dev/null 2>&1; then
   log "Creating resource group $RG in $LOCATION..."
@@ -81,7 +99,7 @@ ok "Log Analytics $LAW"
 if ! az acr show -n "$ACR" >/dev/null 2>&1; then
   log "Creating ACR $ACR (globally unique)..."
   az acr create -g "$RG" -n "$ACR" --sku Basic --admin-enabled false >/dev/null \
-    || die "ACR create failed — name likely taken. Set ACR=<unique name> and rerun."
+    || die "ACR create failed — see error above. If it says 'already in use', set ACR=<unique name> and rerun."
 fi
 ACR_ID=$(az acr show -g "$RG" -n "$ACR" --query id -o tsv)
 ACR_SERVER=$(az acr show -g "$RG" -n "$ACR" --query loginServer -o tsv)
@@ -98,8 +116,8 @@ if ! az postgres flexible-server show -g "$RG" -n "$DB_SERVER" >/dev/null 2>&1; 
     --sku-name Standard_B1ms --tier Burstable \
     --storage-size 32 --version 16 \
     --public-access 0.0.0.0 \
-    --database-name "$DB_NAME" --yes >/dev/null \
-    || die "Postgres create failed — name likely taken. Set DB_SERVER=<unique name> and rerun."
+    --yes >/dev/null \
+    || die "Postgres create failed — see error above. If the name is taken, set DB_SERVER=<unique name> and rerun."
   umask 077
   printf '%s' "$DB_PASSWORD" > "$DB_PASSWORD_FILE"
   log "Saved DB password to $DB_PASSWORD_FILE (gitignored; keep safe)."
@@ -112,6 +130,14 @@ else
     die "Postgres $DB_SERVER exists but $DB_PASSWORD_FILE not found. Set DB_PASSWORD=<...> and rerun."
   fi
 fi
+
+# Create database separately — works across az CLI versions (newer ones accept
+# --database-name on server create; older ones don't).
+if ! az postgres flexible-server db show -g "$RG" -s "$DB_SERVER" -d "$DB_NAME" >/dev/null 2>&1; then
+  log "Creating database $DB_NAME on $DB_SERVER..."
+  az postgres flexible-server db create -g "$RG" -s "$DB_SERVER" -d "$DB_NAME" >/dev/null
+fi
+
 DATABASE_URL="postgres://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:5432/${DB_NAME}?sslmode=require"
 ok "Postgres $DB_SERVER ($DB_HOST)"
 

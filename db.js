@@ -47,6 +47,15 @@ async function init() {
     CREATE INDEX IF NOT EXISTS idx_state_user_read ON article_state(user_id, read_at);
     CREATE INDEX IF NOT EXISTS idx_state_user_saved ON article_state(user_id, saved_at);
 
+    -- Feed subscriptions: default is "subscribed to everything". Rows here are
+    -- opt-OUTs, so new feeds appear automatically for existing users.
+    CREATE TABLE IF NOT EXISTS user_feed_unsubscribed (
+      user_id TEXT NOT NULL,
+      feed_name TEXT NOT NULL,
+      PRIMARY KEY (user_id, feed_name)
+    );
+    CREATE INDEX IF NOT EXISTS idx_user_unsub_user ON user_feed_unsubscribed(user_id);
+
     CREATE TABLE IF NOT EXISTS feed_health (
       name TEXT PRIMARY KEY,
       url TEXT NOT NULL,
@@ -210,11 +219,39 @@ async function kvSet(key, value) {
   );
 }
 
-async function countSince(timestamp) {
+async function countSince(userId, timestamp) {
   const { rows } = await pool.query(
-    `SELECT COUNT(*)::int AS n FROM articles WHERE timestamp > $1`, [timestamp]
+    `SELECT COUNT(*)::int AS n FROM articles a
+     WHERE a.timestamp > $1
+       AND NOT EXISTS (
+         SELECT 1 FROM user_feed_unsubscribed u
+         WHERE u.user_id = $2 AND u.feed_name = a.source
+       )`,
+    [timestamp, userId]
   );
   return rows[0].n;
+}
+
+async function getUserUnsubscribed(userId) {
+  const { rows } = await pool.query(
+    `SELECT feed_name FROM user_feed_unsubscribed WHERE user_id = $1`, [userId]
+  );
+  return rows.map(r => r.feed_name);
+}
+
+async function setUserSubscription(userId, feedName, subscribed) {
+  if (subscribed) {
+    await pool.query(
+      `DELETE FROM user_feed_unsubscribed WHERE user_id = $1 AND feed_name = $2`,
+      [userId, feedName]
+    );
+  } else {
+    await pool.query(
+      `INSERT INTO user_feed_unsubscribed (user_id, feed_name) VALUES ($1, $2)
+       ON CONFLICT DO NOTHING`,
+      [userId, feedName]
+    );
+  }
 }
 
 async function maxTimestamp() {
@@ -231,7 +268,11 @@ async function unreadCount(userId) {
   const { rows } = await pool.query(
     `SELECT COUNT(*)::int AS n FROM articles a
      LEFT JOIN article_state s ON s.article_id = a.id AND s.user_id = $1
-     WHERE s.read_at IS NULL`, [userId]
+     WHERE s.read_at IS NULL
+       AND NOT EXISTS (
+         SELECT 1 FROM user_feed_unsubscribed u
+         WHERE u.user_id = $1 AND u.feed_name = a.source
+       )`, [userId]
   );
   return rows[0].n;
 }
@@ -271,7 +312,11 @@ async function clusterSize(clusterId) {
 // Single query returning rows + total + related_sources (array of other-source
 // names in the same cluster). Avoids N+1 lookups for the feed listing.
 async function queryFeed({ userId, category, source, search, read, saved, limit = 100, offset = 0 }) {
-  const where = [];
+  // Baseline filter: respect the user's feed subscriptions.
+  const where = [`NOT EXISTS (
+    SELECT 1 FROM user_feed_unsubscribed u
+    WHERE u.user_id = $1 AND u.feed_name = a.source
+  )`];
   const params = [userId];
   const push = (clause, ...vals) => { where.push(clause); params.push(...vals); };
 
@@ -285,7 +330,7 @@ async function queryFeed({ userId, category, source, search, read, saved, limit 
     where.push(`(LOWER(a.title) LIKE $${i} OR LOWER(a.summary) LIKE $${i} OR LOWER(a.source) LIKE $${i})`);
     params.push(`%${search.toLowerCase()}%`);
   }
-  const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  const whereClause = `WHERE ${where.join(' AND ')}`;
 
   const totalResult = await pool.query(
     `SELECT COUNT(*)::int AS n FROM articles a
@@ -348,4 +393,6 @@ module.exports = {
   clusterSources,
   clusterSize,
   queryFeed,
+  getUserUnsubscribed,
+  setUserSubscription,
 };

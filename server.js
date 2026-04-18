@@ -274,10 +274,13 @@ app.get('/api/feed', async (req, res) => {
   }
 });
 
-// New-article count for background notifications
+// New-article count for background notifications (respects subscriptions)
 app.get('/api/new-count', async (req, res) => {
   const since = parseInt(req.query.since, 10) || 0;
-  const [count, maxTs] = await Promise.all([db.countSince(since), db.maxTimestamp()]);
+  const [count, maxTs] = await Promise.all([
+    db.countSince(req.userId, since),
+    db.maxTimestamp(),
+  ]);
   res.json({ count, maxTimestamp: maxTs });
 });
 
@@ -387,7 +390,11 @@ app.get('/api/sources', (req, res) => {
 });
 
 app.get('/api/feed-health', async (req, res) => {
-  const health = await db.getFeedHealth();
+  const [health, unsubscribed] = await Promise.all([
+    db.getFeedHealth(),
+    db.getUserUnsubscribed(req.userId),
+  ]);
+  const unsubSet = new Set(unsubscribed);
   const now = Date.now();
   res.json(health.map(h => ({
     name: h.name,
@@ -399,6 +406,7 @@ app.get('/api/feed-health', async (req, res) => {
     lastErrorAt: Number(h.last_error_at) || null,
     itemCount: h.last_item_count,
     consecutiveFailures: h.consecutive_failures,
+    subscribed: !unsubSet.has(h.name),
     status: !h.last_success ? 'unknown'
           : h.consecutive_failures >= 3 ? 'down'
           : h.consecutive_failures > 0 ? 'degraded'
@@ -407,15 +415,28 @@ app.get('/api/feed-health', async (req, res) => {
   })));
 });
 
+// Toggle the user's subscription to a given feed by name
+app.post('/api/my-feeds/:name', async (req, res) => {
+  const subscribed = req.body?.subscribed !== false;
+  const name = req.params.name;
+  if (!feedConfig.some(f => f.name === name)) {
+    return res.status(404).json({ error: 'Unknown feed' });
+  }
+  await db.setUserSubscription(req.userId, name, subscribed);
+  res.json({ ok: true, name, subscribed });
+});
+
 app.get('/api/stats', async (req, res) => {
-  const [itemCount, unreadCount, maxTs, health] = await Promise.all([
+  const [itemCount, unreadCount, maxTs, health, unsubscribed] = await Promise.all([
     db.totalCount(),
     db.unreadCount(req.userId),
     db.maxTimestamp(),
     db.getFeedHealth(),
+    db.getUserUnsubscribed(req.userId),
   ]);
   res.json({
     feedCount: feedConfig.length,
+    subscribedCount: feedConfig.length - unsubscribed.length,
     itemCount,
     unreadCount,
     maxTimestamp: maxTs,

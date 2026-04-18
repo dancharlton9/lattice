@@ -748,12 +748,58 @@
     }
     .health-row {
       display: grid;
-      grid-template-columns: 12px 1fr auto auto;
+      grid-template-columns: 12px 1fr auto auto 44px;
       gap: 10px;
       align-items: center;
-      padding: 4px 0;
+      padding: 6px 0;
       font-size: 12px;
     }
+    .health-row.unsubscribed .src,
+    .health-row.unsubscribed .age { opacity: 0.45; }
+
+    /* iOS-ish toggle */
+    .toggle {
+      position: relative;
+      width: 36px;
+      height: 20px;
+      display: inline-block;
+      cursor: pointer;
+    }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle .slider {
+      position: absolute; inset: 0;
+      background: var(--bg-surface);
+      border-radius: 20px;
+      transition: background 0.15s;
+    }
+    .toggle .slider::before {
+      content: '';
+      position: absolute;
+      width: 14px; height: 14px;
+      left: 3px; top: 3px;
+      background: var(--text-primary);
+      border-radius: 50%;
+      transition: transform 0.15s;
+    }
+    .toggle input:checked + .slider { background: var(--accent-green); }
+    .toggle input:checked + .slider::before { transform: translateX(16px); background: var(--bg-primary); }
+
+    .health-panel-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .health-panel-actions .bulk {
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-muted);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 4px 8px;
+    }
+    .health-panel-actions .bulk:hover { color: var(--accent-blue); }
     .health-dot {
       width: 8px;
       height: 8px;
@@ -1359,10 +1405,13 @@
         const res = await fetch('/api/stats');
         const stats = await res.json();
         aiEnabled = !!stats.aiEnabled;
+        const sub = stats.subscribedCount ?? stats.feedCount;
+        const total = stats.feedCount;
+        const sourcesValue = sub === total ? total : `${sub}<span style="color:var(--text-muted);font-weight:300;font-size:14px;">/${total}</span>`;
         document.getElementById('stats').innerHTML = `
-          <div class="stat-card">
+          <div class="stat-card clickable" onclick="toggleHealthPanel()" title="Manage your sources">
             <div class="label">Sources</div>
-            <div class="value blue">${stats.feedCount}</div>
+            <div class="value blue">${sourcesValue}</div>
           </div>
           <div class="stat-card">
             <div class="label">Unread</div>
@@ -1372,7 +1421,7 @@
             <div class="label">Articles</div>
             <div class="value mauve">${stats.itemCount}</div>
           </div>
-          <div class="stat-card clickable" onclick="toggleHealthPanel()" title="Click for feed health">
+          <div class="stat-card ${stats.errors?.length ? 'clickable' : ''}" ${stats.errors?.length ? 'onclick="toggleHealthPanel()"' : ''}>
             <div class="label">Errors</div>
             <div class="value ${stats.errors?.length ? 'peach' : 'green'}">${stats.errors?.length || 0}</div>
           </div>
@@ -1471,23 +1520,75 @@
 
     function renderHealthPanel() {
       const health = window._lastHealth || [];
-      const now = Date.now();
       const rows = health.map(h => {
         const age = h.lastSuccess ? timeAgo(h.lastSuccess) : 'never';
+        const sub = h.subscribed !== false;
         return `
-          <div class="health-row" title="${escAttr(h.lastError || '')}">
+          <div class="health-row ${sub ? '' : 'unsubscribed'}" title="${escAttr(h.lastError || '')}">
             <div class="health-dot ${h.status}"></div>
             <div class="src">${escHtml(h.name)} <span class="cat">${escHtml(h.category || '')}</span></div>
             <div class="age">${h.itemCount || 0} items</div>
             <div class="age">${age}</div>
+            <label class="toggle" title="${sub ? 'Unsubscribe' : 'Subscribe'}">
+              <input type="checkbox" ${sub ? 'checked' : ''} onchange="toggleSubscription('${escAttr(h.name)}', this.checked)">
+              <span class="slider"></span>
+            </label>
           </div>
         `;
       }).join('');
       document.getElementById('healthPanel').innerHTML = `
         <div class="health-panel">
-          <h3>Feed health</h3>
+          <div class="health-panel-actions">
+            <h3 style="margin:0">Sources</h3>
+            <div>
+              <button class="bulk" onclick="setAllSubscriptions(true)">Select all</button>
+              <button class="bulk" onclick="setAllSubscriptions(false)">Deselect all</button>
+            </div>
+          </div>
           ${rows || '<div style="color:var(--text-muted); font-size:12px;">No data yet.</div>'}
         </div>`;
+    }
+
+    async function toggleSubscription(name, subscribed) {
+      // Optimistically update in cache so the panel reflects instantly
+      if (window._lastHealth) {
+        const row = window._lastHealth.find(h => h.name === name);
+        if (row) row.subscribed = subscribed;
+        renderHealthPanel();
+      }
+      try {
+        await fetch(`/api/my-feeds/${encodeURIComponent(name)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subscribed }),
+        });
+      } catch (e) {
+        if (window._lastHealth) {
+          const row = window._lastHealth.find(h => h.name === name);
+          if (row) row.subscribed = !subscribed;
+          renderHealthPanel();
+        }
+        return;
+      }
+      loadFeed();
+      loadStats();
+    }
+
+    async function setAllSubscriptions(subscribed) {
+      const health = window._lastHealth || [];
+      const targets = health.filter(h => (h.subscribed !== false) !== subscribed);
+      if (!targets.length) return;
+      for (const h of targets) h.subscribed = subscribed;
+      renderHealthPanel();
+      await Promise.allSettled(targets.map(h =>
+        fetch(`/api/my-feeds/${encodeURIComponent(h.name)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subscribed }),
+        })
+      ));
+      loadFeed();
+      loadStats();
     }
 
     function timeAgo(ts) {
