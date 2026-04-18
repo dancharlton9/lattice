@@ -1,13 +1,16 @@
-# Local dev only. Production runs on Azure Container Apps with a managed
-# Postgres (see .github/workflows/deploy.yml).
+# Local / homelab dev (Traefik at dcwd.dev).
+# Production on Azure Container Apps doesn't use this file — the pipeline
+# deploys straight from the Dockerfile.
 services:
   lattice:
     build: .
     container_name: lattice
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     ports:
       # Host port configurable to avoid clashes (e.g. with VS Code on :3000).
-      # Override with LATTICE_PORT=... or put it in .env next to this file.
+      # Override with LATTICE_PORT=... or a .env file next to this compose.
       - "${LATTICE_PORT:-3010}:3000"
     volumes:
       - ./feeds.json:/app/feeds.json:ro
@@ -19,6 +22,22 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      - default
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      # HTTP -> HTTPS redirect
+      - "traefik.http.routers.lattice.entrypoints=http"
+      - "traefik.http.routers.lattice.rule=Host(`lattice.dcwd.dev`)"
+      - "traefik.http.routers.lattice.middlewares=traefik-https-redirect"
+      # HTTPS
+      - "traefik.http.routers.lattice-secure.entrypoints=https"
+      - "traefik.http.routers.lattice-secure.rule=Host(`lattice.dcwd.dev`)"
+      - "traefik.http.routers.lattice-secure.tls=true"
+      - "traefik.http.routers.lattice-secure.tls.certresolver=cloudflare"
+      - "traefik.http.services.lattice.loadbalancer.server.port=3000"
 
   postgres:
     image: postgres:16-alpine
@@ -35,6 +54,13 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    networks:
+      - default
+
+networks:
+  default:
+  proxy:
+    external: true
 
 volumes:
   lattice-pgdata:
