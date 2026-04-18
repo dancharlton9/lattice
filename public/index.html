@@ -1006,7 +1006,7 @@
         <div class="meta-bar">
           <div class="status-dot"></div>
           <span id="status">Loading...</span>
-          <button class="icon-btn" onclick="refresh()" title="Refresh feeds">
+          <button class="icon-btn" data-action="refresh" title="Refresh feeds">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
           </button>
         </div>
@@ -1020,12 +1020,12 @@
       <div class="controls">
         <div class="search-box">
           <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input type="text" id="search" placeholder="Search articles..." oninput="debounceSearch()">
+          <input type="text" id="search" placeholder="Search articles...">
         </div>
         <div class="filter-group" id="readFilter">
-          <button class="seg active" data-read="all" onclick="setReadFilter('all', this)">All</button>
-          <button class="seg" data-read="unread" onclick="setReadFilter('unread', this)">Unread</button>
-          <button class="seg" data-read="saved" onclick="setReadFilter('saved', this)">Saved</button>
+          <button class="seg active" data-action="set-read-filter" data-value="all">All</button>
+          <button class="seg" data-action="set-read-filter" data-value="unread">Unread</button>
+          <button class="seg" data-action="set-read-filter" data-value="saved">Saved</button>
         </div>
         <div class="filter-pills" id="filters"></div>
       </div>
@@ -1044,8 +1044,8 @@
       <footer class="footer">
         <span>© 2026 lattice · readlattice.co</span>
         <div class="footer-links">
-          <a onclick="showModal('about')">About</a>
-          <a onclick="showModal('privacy')">Privacy</a>
+          <a data-action="show-modal" data-modal="about">About</a>
+          <a data-action="show-modal" data-modal="privacy">Privacy</a>
           <a href="https://github.com/dcwd/lattice" target="_blank" rel="noopener">Source</a>
         </div>
       </footer>
@@ -1053,27 +1053,27 @@
 
     <div class="reader-panel" id="readerPanel">
       <div class="reader-header">
-        <button class="icon-btn" onclick="closeReader()" title="Back to feed">
+        <button class="icon-btn" data-action="close-reader" title="Back to feed">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
         </button>
         <span class="reader-source" id="readerSource"></span>
         <span class="reader-spacer"></span>
         <div class="reader-nav">
-          <button class="icon-btn" id="prevBtn" onclick="gotoPrev()" title="Previous article (←)">
+          <button class="icon-btn" id="prevBtn" data-action="prev-article" title="Previous article (←)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
           </button>
           <span class="reader-position" id="readerPosition"></span>
-          <button class="icon-btn" id="nextBtn" onclick="gotoNext()" title="Next article (→)">
+          <button class="icon-btn" id="nextBtn" data-action="next-article" title="Next article (→)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
           </button>
         </div>
-        <button class="icon-btn" id="summaryBtn" onclick="requestSummary()" title="AI summary" hidden>
+        <button class="icon-btn" id="summaryBtn" data-action="request-summary" title="AI summary" hidden>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
         </button>
-        <button class="icon-btn" id="saveBtn" onclick="toggleSaveActive()" title="Save (s)">
+        <button class="icon-btn" id="saveBtn" data-action="toggle-save-active" title="Save (s)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
         </button>
-        <button class="icon-btn" onclick="openExternal()" title="Open in browser">
+        <button class="icon-btn" data-action="open-external-reader" title="Open in browser">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
         </button>
       </div>
@@ -1085,9 +1085,9 @@
     <span>
       Lattice stores one anonymous cookie so we can remember what you've read,
       saved, and unsubscribed from. No tracking, no analytics, no third parties.
-      <a onclick="showModal('privacy')">Learn more</a>
+      <a data-action="show-modal" data-modal="privacy">Learn more</a>
     </span>
-    <button onclick="dismissCookieBanner()">OK</button>
+    <button data-action="dismiss-cookie-banner">OK</button>
   </div>
 
   <div id="modalRoot"></div>
@@ -1189,7 +1189,7 @@
         if (idx === selectedIndex) classes.push('selected');
         const related = (item.relatedSources || []).length;
         return `
-          <div class="${classes.join(' ')}" data-index="${idx}" data-id="${escAttr(item.id)}" onclick="openArticle('${escAttr(item.id)}')">
+          <div class="${classes.join(' ')}" data-action="open-article" data-index="${idx}" data-id="${escAttr(item.id)}">
             <div class="source-icon">${getIcon(item.icon)}</div>
             <div class="content">
               <div class="title">${escHtml(item.title)}</div>
@@ -1203,13 +1203,13 @@
               </div>
             </div>
             <div class="item-actions">
-              <button class="item-action-btn" onclick="event.stopPropagation(); toggleSave('${escAttr(item.id)}')" title="${item.saved ? 'Unsave' : 'Save'} (s)">
+              <button class="item-action-btn" data-action="toggle-save" data-id="${escAttr(item.id)}" data-stop="1" title="${item.saved ? 'Unsave' : 'Save'} (s)">
                 <svg viewBox="0 0 24 24" fill="${item.saved ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
               </button>
-              <button class="item-action-btn" onclick="event.stopPropagation(); toggleRead('${escAttr(item.id)}')" title="${item.read ? 'Mark unread' : 'Mark read'} (m)">
+              <button class="item-action-btn" data-action="toggle-read" data-id="${escAttr(item.id)}" data-stop="1" title="${item.read ? 'Mark unread' : 'Mark read'} (m)">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
               </button>
-              <button class="item-action-btn" onclick="event.stopPropagation(); window.open('${escAttr(item.link)}', '_blank')" title="Open in new tab">
+              <button class="item-action-btn" data-action="open-external" data-href="${escAttr(item.link)}" data-stop="1" title="Open in new tab">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
               </button>
             </div>
@@ -1219,7 +1219,7 @@
 
       if (allItems.length > displayCount) {
         container.innerHTML += `
-          <button class="load-more" onclick="loadMore()">
+          <button class="load-more" data-action="load-more">
             Show more (${allItems.length - displayCount} remaining)
           </button>`;
       }
@@ -1548,7 +1548,7 @@
         const total = stats.feedCount;
         const sourcesValue = sub === total ? total : `${sub}<span style="color:var(--text-muted);font-weight:300;font-size:14px;">/${total}</span>`;
         document.getElementById('stats').innerHTML = `
-          <div class="stat-card clickable" onclick="toggleHealthPanel()" title="Manage your sources">
+          <div class="stat-card clickable" data-action="toggle-health-panel" title="Manage your sources">
             <div class="label">Sources</div>
             <div class="value blue">${sourcesValue}</div>
           </div>
@@ -1560,7 +1560,7 @@
             <div class="label">Articles</div>
             <div class="value mauve">${stats.itemCount}</div>
           </div>
-          <div class="stat-card ${stats.errors?.length ? 'clickable' : ''}" ${stats.errors?.length ? 'onclick="toggleHealthPanel()"' : ''}>
+          <div class="stat-card ${stats.errors?.length ? 'clickable' : ''}" ${stats.errors?.length ? 'data-action="toggle-health-panel"' : ''}>
             <div class="label">Errors</div>
             <div class="value ${stats.errors?.length ? 'peach' : 'green'}">${stats.errors?.length || 0}</div>
           </div>
@@ -1575,9 +1575,9 @@
         const categories = Object.keys(sources);
         const container = document.getElementById('filters');
         container.innerHTML = `
-          <div class="pill active" onclick="setCategory(null, this)">All</div>
+          <div class="pill active" data-action="set-category" data-value="">All</div>
           ${categories.map(c => `
-            <div class="pill" onclick="setCategory('${c}', this)">${c}</div>
+            <div class="pill" data-action="set-category" data-value="${escAttr(c)}">${escHtml(c)}</div>
           `).join('')}
         `;
       } catch (e) {}
@@ -1623,7 +1623,7 @@
     function showNewBanner(count) {
       const slot = document.getElementById('newBannerSlot');
       slot.innerHTML = `
-        <div class="new-banner" onclick="applyPendingNew()">
+        <div class="new-banner" data-action="apply-pending-new">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
           <span>${count} new article${count === 1 ? '' : 's'} — click to load</span>
         </div>`;
@@ -1669,7 +1669,7 @@
             <div class="age">${h.itemCount || 0} items</div>
             <div class="age">${age}</div>
             <label class="toggle" title="${sub ? 'Unsubscribe' : 'Subscribe'}">
-              <input type="checkbox" ${sub ? 'checked' : ''} onchange="toggleSubscription('${escAttr(h.name)}', this.checked)">
+              <input type="checkbox" ${sub ? 'checked' : ''} data-action="toggle-subscription" data-name="${escAttr(h.name)}">
               <span class="slider"></span>
             </label>
           </div>
@@ -1680,8 +1680,8 @@
           <div class="health-panel-actions">
             <h3 style="margin:0">Sources</h3>
             <div>
-              <button class="bulk" onclick="setAllSubscriptions(true)">Select all</button>
-              <button class="bulk" onclick="setAllSubscriptions(false)">Deselect all</button>
+              <button class="bulk" data-action="set-all-subscriptions" data-value="true">Select all</button>
+              <button class="bulk" data-action="set-all-subscriptions" data-value="false">Deselect all</button>
             </div>
           </div>
           ${rows || '<div style="color:var(--text-muted); font-size:12px;">No data yet.</div>'}
@@ -1813,9 +1813,9 @@
       const html = MODALS[name];
       if (!html) return;
       document.getElementById('modalRoot').innerHTML = `
-        <div class="modal-backdrop" onclick="if (event.target === this) closeModal()">
+        <div class="modal-backdrop" data-action="close-modal-backdrop">
           <div class="modal">
-            <button class="modal-close" onclick="closeModal()" aria-label="Close">×</button>
+            <button class="modal-close" data-action="close-modal" aria-label="Close">×</button>
             ${html}
           </div>
         </div>`;
@@ -1823,6 +1823,59 @@
     function closeModal() {
       document.getElementById('modalRoot').innerHTML = '';
     }
+
+    // Single delegated click dispatcher. CSP forbids inline handlers so every
+    // interactive element carries `data-action="..."` and (where relevant)
+    // `data-id`, `data-modal`, `data-value` etc.
+    document.addEventListener('click', (e) => {
+      const el = e.target.closest('[data-action]');
+      if (!el) return;
+      if (el.dataset.stop) e.stopPropagation();
+
+      switch (el.dataset.action) {
+        // Feed
+        case 'open-article': openArticle(el.dataset.id); break;
+        case 'toggle-read': toggleRead(el.dataset.id); break;
+        case 'toggle-save': toggleSave(el.dataset.id); break;
+        case 'open-external': window.open(el.dataset.href, '_blank', 'noopener'); break;
+        case 'load-more': loadMore(); break;
+        case 'refresh': refresh(); break;
+
+        // Filters
+        case 'set-category': setCategory(el.dataset.value || null, el); break;
+        case 'set-read-filter': setReadFilter(el.dataset.value, el); break;
+
+        // Reader
+        case 'close-reader': closeReader(); break;
+        case 'prev-article': gotoPrev(); break;
+        case 'next-article': gotoNext(); break;
+        case 'toggle-save-active': toggleSaveActive(); break;
+        case 'request-summary': requestSummary(); break;
+        case 'open-external-reader': openExternal(); break;
+
+        // Sources / health panel
+        case 'toggle-health-panel': toggleHealthPanel(); break;
+        case 'set-all-subscriptions': setAllSubscriptions(el.dataset.value === 'true'); break;
+
+        // Background refresh banner
+        case 'apply-pending-new': applyPendingNew(); break;
+
+        // Cookie banner, footer, modals
+        case 'dismiss-cookie-banner': dismissCookieBanner(); break;
+        case 'show-modal': showModal(el.dataset.modal); break;
+        case 'close-modal': closeModal(); break;
+        case 'close-modal-backdrop':
+          if (e.target === el) closeModal();
+          break;
+      }
+    });
+
+    document.addEventListener('change', (e) => {
+      const el = e.target.closest('[data-action="toggle-subscription"]');
+      if (el) toggleSubscription(el.dataset.name, el.checked);
+    });
+
+    document.getElementById('search').addEventListener('input', debounceSearch);
 
     // Init
     loadStats();
