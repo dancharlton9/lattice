@@ -6,7 +6,9 @@ services:
     container_name: lattice
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      # Host port configurable to avoid clashes (e.g. with VS Code on :3000).
+      # Override with LATTICE_PORT=... or put it in .env next to this file.
+      - "${LATTICE_PORT:-3010}:3000"
     volumes:
       - ./feeds.json:/app/feeds.json:ro
     environment:
