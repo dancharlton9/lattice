@@ -3,7 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Lattice</title>
+  <title>Lattice — AI News</title>
+  <meta name="description" content="Self-hosted AI news aggregator — read, save, and follow AI news across sources.">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+  <link rel="shortcut icon" href="/favicon.ico">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <meta name="theme-color" content="#1e1e2e">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
   <style>
@@ -79,21 +87,13 @@
       gap: 10px;
     }
 
-    .logo-icon {
-      width: 32px;
-      height: 32px;
-      color: var(--accent-blue);
+    .logo {
+      height: 36px;
+      width: auto;
+      display: block;
     }
-
-    .header h1 {
-      font-size: 20px;
-      font-weight: 500;
-      letter-spacing: -0.02em;
-    }
-
-    .header h1 span {
-      color: var(--text-muted);
-      font-weight: 300;
+    @media (max-width: 768px) {
+      .logo { height: 30px; }
     }
 
     .meta-bar {
@@ -808,17 +808,9 @@
     <div class="feed-panel" id="feedPanel">
       <div class="header">
         <div class="header-left">
-          <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="3" width="7" height="7" rx="1"/>
-            <rect x="14" y="3" width="7" height="7" rx="1"/>
-            <rect x="3" y="14" width="7" height="7" rx="1"/>
-            <rect x="14" y="14" width="7" height="7" rx="1"/>
-            <line x1="10" y1="6.5" x2="14" y2="6.5" opacity="0.4"/>
-            <line x1="10" y1="17.5" x2="14" y2="17.5" opacity="0.4"/>
-            <line x1="6.5" y1="10" x2="6.5" y2="14" opacity="0.4"/>
-            <line x1="17.5" y1="10" x2="17.5" y2="14" opacity="0.4"/>
-          </svg>
-          <h1>Lattice <span>AI News</span></h1>
+          <a href="/" aria-label="Lattice home">
+            <img class="logo" src="/lattice-wordmark-mocha.svg" alt="Lattice — AI News">
+          </a>
         </div>
         <div class="meta-bar">
           <div class="status-dot"></div>

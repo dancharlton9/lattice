@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" role="img" aria-label="Lattice">
+  <title>Lattice</title>
+  <style>
+    .primary { stroke: #179299; fill: #179299; }
+    .accent  { fill: #ea76cb; }
+    @media (prefers-color-scheme: dark) {
+      .primary { stroke: #94e2d5; fill: #94e2d5; }
+      .accent  { fill: #f5c2e7; }
+    }
+  </style>
+  <!-- Faint interior hint -->
+  <g class="primary" fill="none" stroke-width="0.8" stroke-linecap="round" opacity="0.35">
+    <line x1="2" y1="2" x2="8" y2="8"/>
+    <line x1="8" y1="8" x2="8" y2="14"/>
+    <line x1="8" y1="8" x2="14" y2="14"/>
+  </g>
+  <!-- L spine -->
+  <g class="primary" fill="none" stroke-width="1.6" stroke-linecap="round">
+    <line x1="2" y1="2" x2="2" y2="14"/>
+    <line x1="2" y1="14" x2="14" y2="14"/>
+  </g>
+  <!-- Corner nodes -->
+  <circle class="primary" stroke="none" cx="2" cy="2" r="1.8"/>
+  <circle class="primary" stroke="none" cx="2" cy="14" r="1.8"/>
+  <circle class="accent" cx="14" cy="14" r="1.8"/>
+</svg>

@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Lattice">
+  <title>Lattice</title>
+  <!-- Secondary network edges -->
+  <g stroke="#94e2d5" fill="none" stroke-linecap="round" stroke-width="2" opacity="0.35">
+    <line x1="6" y1="6" x2="40" y2="40"/>
+    <line x1="6" y1="40" x2="40" y2="40"/>
+    <line x1="40" y1="40" x2="40" y2="74"/>
+    <line x1="40" y1="40" x2="74" y2="74"/>
+  </g>
+  <!-- Primary L spine -->
+  <g stroke="#94e2d5" fill="none" stroke-linecap="round" stroke-width="3.5">
+    <line x1="6" y1="6" x2="6" y2="74"/>
+    <line x1="6" y1="74" x2="74" y2="74"/>
+  </g>
+  <!-- Secondary nodes -->
+  <g fill="#94e2d5" opacity="0.45">
+    <circle cx="40" cy="40" r="4.5"/>
+    <circle cx="6" cy="40" r="4.5"/>
+    <circle cx="40" cy="74" r="4.5"/>
+  </g>
+  <!-- Primary L nodes -->
+  <g fill="#94e2d5">
+    <circle cx="6" cy="6" r="5.5"/>
+    <circle cx="6" cy="74" r="5.5"/>
+  </g>
+  <!-- Accent node (pink) -->
+  <circle cx="74" cy="74" r="5.5" fill="#f5c2e7"/>
+</svg>

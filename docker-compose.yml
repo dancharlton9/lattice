@@ -1,38 +1,38 @@
+# Local dev only. Production runs on Azure Container Apps with a managed
+# Postgres (see .github/workflows/deploy.yml).
 services:
   lattice:
     build: .
     container_name: lattice
     restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
-    expose:
-      - "3000"
+    ports:
+      - "3000:3000"
     volumes:
       - ./feeds.json:/app/feeds.json:ro
-      - lattice-data:/app/data
     environment:
       - PORT=3000
-      - DB_PATH=/app/data/lattice.db
+      - DATABASE_URL=postgres://lattice:lattice@postgres:5432/lattice
       # Optional: set ANTHROPIC_API_KEY to enable AI summaries / digest.
       # - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-    networks:
-      proxy:
-    labels:
-      - "traefik.enable=true"
-      # HTTP -> HTTPS redirect
-      - "traefik.http.routers.lattice.entrypoints=http"
-      - "traefik.http.routers.lattice.rule=Host(`lattice.dcwd.dev`)"
-      - "traefik.http.routers.lattice.middlewares=traefik-https-redirect"
-      # HTTPS
-      - "traefik.http.routers.lattice-secure.entrypoints=https"
-      - "traefik.http.routers.lattice-secure.rule=Host(`lattice.dcwd.dev`)"
-      - "traefik.http.routers.lattice-secure.tls=true"
-      - "traefik.http.routers.lattice-secure.tls.certresolver=cloudflare"
-      - "traefik.http.services.lattice.loadbalancer.server.port=3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
 
-networks:
-  proxy:
-    external: true
+  postgres:
+    image: postgres:16-alpine
+    container_name: lattice-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=lattice
+      - POSTGRES_PASSWORD=lattice
+      - POSTGRES_DB=lattice
+    volumes:
+      - lattice-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lattice -d lattice"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
 volumes:
-  lattice-data:
+  lattice-pgdata:

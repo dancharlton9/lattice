@@ -1,277 +1,332 @@
-const Database = require('better-sqlite3');
-const fs = require('fs');
-const path = require('path');
+const { Pool } = require('pg');
 
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'data', 'lattice.db');
-fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
+if (!process.env.DATABASE_URL) {
+  throw new Error('DATABASE_URL is required (e.g. postgres://user:pass@host:5432/lattice)');
+}
 
-const db = new Database(DB_PATH);
-db.pragma('journal_mode = WAL');
-db.pragma('synchronous = NORMAL');
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_SSL === 'true' ? { rejectUnauthorized: false } : false,
+  max: parseInt(process.env.DATABASE_POOL_MAX || '10', 10),
+});
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS articles (
-    id TEXT PRIMARY KEY,
-    title TEXT NOT NULL,
-    link TEXT NOT NULL,
-    pub_date TEXT,
-    timestamp INTEGER NOT NULL,
-    source TEXT NOT NULL,
-    category TEXT NOT NULL,
-    icon TEXT,
-    summary TEXT,
-    full_content TEXT,
-    creator TEXT,
-    fetched_at INTEGER NOT NULL,
-    read_at INTEGER,
-    saved_at INTEGER,
-    cluster_id TEXT,
-    summary_ai TEXT
+pool.on('error', (err) => {
+  console.error('Postgres pool error:', err.message);
+});
+
+async function init() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS articles (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      link TEXT NOT NULL,
+      pub_date TEXT,
+      timestamp BIGINT NOT NULL,
+      source TEXT NOT NULL,
+      category TEXT NOT NULL,
+      icon TEXT,
+      summary TEXT,
+      full_content TEXT,
+      creator TEXT,
+      fetched_at BIGINT NOT NULL,
+      cluster_id TEXT,
+      summary_ai TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_articles_timestamp ON articles(timestamp DESC);
+    CREATE INDEX IF NOT EXISTS idx_articles_source ON articles(source);
+    CREATE INDEX IF NOT EXISTS idx_articles_category ON articles(category);
+    CREATE INDEX IF NOT EXISTS idx_articles_cluster ON articles(cluster_id);
+
+    CREATE TABLE IF NOT EXISTS article_state (
+      user_id TEXT NOT NULL,
+      article_id TEXT NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+      read_at BIGINT,
+      saved_at BIGINT,
+      PRIMARY KEY (user_id, article_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_state_user_read ON article_state(user_id, read_at);
+    CREATE INDEX IF NOT EXISTS idx_state_user_saved ON article_state(user_id, saved_at);
+
+    CREATE TABLE IF NOT EXISTS feed_health (
+      name TEXT PRIMARY KEY,
+      url TEXT NOT NULL,
+      category TEXT,
+      last_success BIGINT,
+      last_attempt BIGINT,
+      last_error TEXT,
+      last_error_at BIGINT,
+      last_item_count INTEGER DEFAULT 0,
+      consecutive_failures INTEGER DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS extracted_content (
+      url TEXT PRIMARY KEY,
+      title TEXT,
+      content TEXT,
+      byline TEXT,
+      site_name TEXT,
+      fetched_at BIGINT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS kv (
+      key TEXT PRIMARY KEY,
+      value TEXT
+    );
+  `);
+}
+
+async function upsertArticle(article) {
+  const { rows } = await pool.query(
+    `INSERT INTO articles (id, title, link, pub_date, timestamp, source, category, icon,
+                           summary, full_content, creator, fetched_at, cluster_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+     ON CONFLICT (id) DO UPDATE SET
+       title = EXCLUDED.title,
+       summary = EXCLUDED.summary,
+       full_content = EXCLUDED.full_content,
+       pub_date = EXCLUDED.pub_date,
+       timestamp = EXCLUDED.timestamp
+     RETURNING (xmax = 0) AS inserted`,
+    [
+      article.id, article.title, article.link, article.pub_date, article.timestamp,
+      article.source, article.category, article.icon, article.summary,
+      article.full_content, article.creator, article.fetched_at, article.cluster_id ?? null,
+    ]
   );
-  CREATE INDEX IF NOT EXISTS idx_articles_timestamp ON articles(timestamp DESC);
-  CREATE INDEX IF NOT EXISTS idx_articles_source ON articles(source);
-  CREATE INDEX IF NOT EXISTS idx_articles_category ON articles(category);
-  CREATE INDEX IF NOT EXISTS idx_articles_cluster ON articles(cluster_id);
-  CREATE INDEX IF NOT EXISTS idx_articles_read ON articles(read_at);
-  CREATE INDEX IF NOT EXISTS idx_articles_saved ON articles(saved_at);
+  return rows[0]?.inserted === true;
+}
 
-  CREATE TABLE IF NOT EXISTS feed_health (
-    name TEXT PRIMARY KEY,
-    url TEXT NOT NULL,
-    category TEXT,
-    last_success INTEGER,
-    last_attempt INTEGER,
-    last_error TEXT,
-    last_error_at INTEGER,
-    last_item_count INTEGER DEFAULT 0,
-    consecutive_failures INTEGER DEFAULT 0
+async function getArticle(id) {
+  const { rows } = await pool.query(`SELECT * FROM articles WHERE id = $1`, [id]);
+  return rows[0] || null;
+}
+
+async function getArticleState(userId, id) {
+  const { rows } = await pool.query(
+    `SELECT read_at, saved_at FROM article_state WHERE user_id = $1 AND article_id = $2`,
+    [userId, id]
   );
+  const row = rows[0];
+  return { read: !!row?.read_at, saved: !!row?.saved_at };
+}
 
-  CREATE TABLE IF NOT EXISTS extracted_content (
-    url TEXT PRIMARY KEY,
-    title TEXT,
-    content TEXT,
-    byline TEXT,
-    site_name TEXT,
-    fetched_at INTEGER NOT NULL
+async function markRead(userId, id, read) {
+  await pool.query(
+    `INSERT INTO article_state (user_id, article_id, read_at)
+     VALUES ($1,$2,$3)
+     ON CONFLICT (user_id, article_id) DO UPDATE SET read_at = EXCLUDED.read_at`,
+    [userId, id, read ? Date.now() : null]
   );
+}
 
-  CREATE TABLE IF NOT EXISTS kv (
-    key TEXT PRIMARY KEY,
-    value TEXT
+async function markSaved(userId, id, saved) {
+  await pool.query(
+    `INSERT INTO article_state (user_id, article_id, saved_at)
+     VALUES ($1,$2,$3)
+     ON CONFLICT (user_id, article_id) DO UPDATE SET saved_at = EXCLUDED.saved_at`,
+    [userId, id, saved ? Date.now() : null]
   );
-`);
-
-const stmts = {
-  insertArticle: db.prepare(`
-    INSERT INTO articles (id, title, link, pub_date, timestamp, source, category, icon, summary, full_content, creator, fetched_at, cluster_id)
-    VALUES (@id, @title, @link, @pub_date, @timestamp, @source, @category, @icon, @summary, @full_content, @creator, @fetched_at, @cluster_id)
-    ON CONFLICT(id) DO UPDATE SET
-      title = excluded.title,
-      summary = excluded.summary,
-      full_content = excluded.full_content,
-      pub_date = excluded.pub_date,
-      timestamp = excluded.timestamp
-  `),
-  exists: db.prepare(`SELECT 1 FROM articles WHERE id = ?`),
-  getById: db.prepare(`SELECT * FROM articles WHERE id = ?`),
-  markRead: db.prepare(`UPDATE articles SET read_at = ? WHERE id = ?`),
-  markSaved: db.prepare(`UPDATE articles SET saved_at = ? WHERE id = ?`),
-  setSummaryAi: db.prepare(`UPDATE articles SET summary_ai = ? WHERE id = ?`),
-  recentForCluster: db.prepare(`
-    SELECT id, title, cluster_id, source
-    FROM articles
-    WHERE timestamp >= ? AND source != ?
-  `),
-  assignCluster: db.prepare(`UPDATE articles SET cluster_id = ? WHERE id = ?`),
-  clusterSources: db.prepare(`
-    SELECT source FROM articles WHERE cluster_id = ? ORDER BY timestamp DESC
-  `),
-  clusterSize: db.prepare(`SELECT COUNT(*) AS n FROM articles WHERE cluster_id = ?`),
-
-  feedHealthUpsert: db.prepare(`
-    INSERT INTO feed_health (name, url, category, last_attempt, last_success, last_error, last_error_at, last_item_count, consecutive_failures)
-    VALUES (@name, @url, @category, @last_attempt, @last_success, @last_error, @last_error_at, @last_item_count, @consecutive_failures)
-    ON CONFLICT(name) DO UPDATE SET
-      url = excluded.url,
-      category = excluded.category,
-      last_attempt = excluded.last_attempt,
-      last_success = COALESCE(excluded.last_success, feed_health.last_success),
-      last_error = excluded.last_error,
-      last_error_at = COALESCE(excluded.last_error_at, feed_health.last_error_at),
-      last_item_count = CASE WHEN excluded.last_success IS NOT NULL
-                             THEN excluded.last_item_count
-                             ELSE feed_health.last_item_count END,
-      consecutive_failures = excluded.consecutive_failures
-  `),
-  feedHealthAll: db.prepare(`SELECT * FROM feed_health ORDER BY name`),
-  feedHealthRemoveMissing: db.prepare(`DELETE FROM feed_health WHERE name NOT IN (SELECT value FROM json_each(?))`),
-
-  extractedGet: db.prepare(`SELECT * FROM extracted_content WHERE url = ?`),
-  extractedSet: db.prepare(`
-    INSERT INTO extracted_content (url, title, content, byline, site_name, fetched_at)
-    VALUES (@url, @title, @content, @byline, @site_name, @fetched_at)
-    ON CONFLICT(url) DO UPDATE SET
-      title = excluded.title,
-      content = excluded.content,
-      byline = excluded.byline,
-      site_name = excluded.site_name,
-      fetched_at = excluded.fetched_at
-  `),
-  extractedPrune: db.prepare(`DELETE FROM extracted_content WHERE fetched_at < ?`),
-
-  kvGet: db.prepare(`SELECT value FROM kv WHERE key = ?`),
-  kvSet: db.prepare(`INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`),
-
-  countSince: db.prepare(`SELECT COUNT(*) AS n FROM articles WHERE timestamp > ?`),
-  maxTimestamp: db.prepare(`SELECT MAX(timestamp) AS ts FROM articles`),
-  totalCount: db.prepare(`SELECT COUNT(*) AS n FROM articles`),
-  categories: db.prepare(`SELECT DISTINCT category FROM articles`),
-  unreadCount: db.prepare(`SELECT COUNT(*) AS n FROM articles WHERE read_at IS NULL`),
-};
-
-function upsertArticle(article) {
-  const isNew = !stmts.exists.get(article.id);
-  stmts.insertArticle.run({
-    cluster_id: null,
-    ...article,
-  });
-  return isNew;
 }
 
-function getArticle(id) {
-  return stmts.getById.get(id);
+async function setAiSummary(id, summary) {
+  await pool.query(`UPDATE articles SET summary_ai = $1 WHERE id = $2`, [summary, id]);
 }
 
-function markRead(id, read) {
-  stmts.markRead.run(read ? Date.now() : null, id);
-}
-
-function markSaved(id, saved) {
-  stmts.markSaved.run(saved ? Date.now() : null, id);
-}
-
-function setAiSummary(id, summary) {
-  stmts.setSummaryAi.run(summary, id);
-}
-
-function recordFeedAttempt({ name, url, category, success, itemCount, errorMessage }) {
+async function recordFeedAttempt({ name, url, category, success, itemCount, errorMessage }) {
   const now = Date.now();
-  const existing = db.prepare(`SELECT consecutive_failures FROM feed_health WHERE name = ?`).get(name);
-  const consecutiveFailures = success ? 0 : (existing?.consecutive_failures || 0) + 1;
-  stmts.feedHealthUpsert.run({
-    name,
-    url,
-    category: category || null,
-    last_attempt: now,
-    last_success: success ? now : null,
-    last_error: success ? null : (errorMessage || 'unknown error'),
-    last_error_at: success ? null : now,
-    last_item_count: itemCount ?? 0,
-    consecutive_failures: consecutiveFailures,
-  });
+  const { rows } = await pool.query(
+    `SELECT consecutive_failures FROM feed_health WHERE name = $1`, [name]
+  );
+  const consecutiveFailures = success ? 0 : (rows[0]?.consecutive_failures || 0) + 1;
+  await pool.query(
+    `INSERT INTO feed_health
+       (name, url, category, last_attempt, last_success, last_error, last_error_at,
+        last_item_count, consecutive_failures)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+     ON CONFLICT (name) DO UPDATE SET
+       url = EXCLUDED.url,
+       category = EXCLUDED.category,
+       last_attempt = EXCLUDED.last_attempt,
+       last_success = COALESCE(EXCLUDED.last_success, feed_health.last_success),
+       last_error = EXCLUDED.last_error,
+       last_error_at = COALESCE(EXCLUDED.last_error_at, feed_health.last_error_at),
+       last_item_count = CASE WHEN EXCLUDED.last_success IS NOT NULL
+                              THEN EXCLUDED.last_item_count
+                              ELSE feed_health.last_item_count END,
+       consecutive_failures = EXCLUDED.consecutive_failures`,
+    [
+      name, url, category || null, now,
+      success ? now : null,
+      success ? null : (errorMessage || 'unknown error'),
+      success ? null : now,
+      itemCount ?? 0,
+      consecutiveFailures,
+    ]
+  );
 }
 
-function getFeedHealth() {
-  return stmts.feedHealthAll.all();
+async function getFeedHealth() {
+  const { rows } = await pool.query(`SELECT * FROM feed_health ORDER BY name`);
+  return rows;
 }
 
-function pruneFeedHealth(activeNames) {
-  stmts.feedHealthRemoveMissing.run(JSON.stringify(activeNames));
+async function pruneFeedHealth(activeNames) {
+  await pool.query(`DELETE FROM feed_health WHERE name <> ALL($1::text[])`, [activeNames]);
 }
 
-function getExtracted(url) {
-  return stmts.extractedGet.get(url);
+async function getExtracted(url) {
+  const { rows } = await pool.query(`SELECT * FROM extracted_content WHERE url = $1`, [url]);
+  return rows[0] || null;
 }
 
-function setExtracted({ url, title, content, byline, siteName }) {
-  stmts.extractedSet.run({
-    url,
-    title: title || null,
-    content: content || null,
-    byline: byline || null,
-    site_name: siteName || null,
-    fetched_at: Date.now(),
-  });
+async function setExtracted({ url, title, content, byline, siteName }) {
+  await pool.query(
+    `INSERT INTO extracted_content (url, title, content, byline, site_name, fetched_at)
+     VALUES ($1,$2,$3,$4,$5,$6)
+     ON CONFLICT (url) DO UPDATE SET
+       title = EXCLUDED.title,
+       content = EXCLUDED.content,
+       byline = EXCLUDED.byline,
+       site_name = EXCLUDED.site_name,
+       fetched_at = EXCLUDED.fetched_at`,
+    [url, title || null, content || null, byline || null, siteName || null, Date.now()]
+  );
 }
 
-function pruneExtracted(maxAgeMs) {
-  stmts.extractedPrune.run(Date.now() - maxAgeMs);
+async function pruneExtracted(maxAgeMs) {
+  await pool.query(`DELETE FROM extracted_content WHERE fetched_at < $1`, [Date.now() - maxAgeMs]);
 }
 
-function kvGet(key) {
-  return stmts.kvGet.get(key)?.value;
+async function kvGet(key) {
+  const { rows } = await pool.query(`SELECT value FROM kv WHERE key = $1`, [key]);
+  return rows[0]?.value;
 }
 
-function kvSet(key, value) {
-  stmts.kvSet.run(key, value);
+async function kvSet(key, value) {
+  await pool.query(
+    `INSERT INTO kv (key, value) VALUES ($1,$2)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+    [key, value]
+  );
 }
 
-function countSince(timestamp) {
-  return stmts.countSince.get(timestamp).n;
+async function countSince(timestamp) {
+  const { rows } = await pool.query(
+    `SELECT COUNT(*)::int AS n FROM articles WHERE timestamp > $1`, [timestamp]
+  );
+  return rows[0].n;
 }
 
-function maxTimestamp() {
-  return stmts.maxTimestamp.get().ts || 0;
+async function maxTimestamp() {
+  const { rows } = await pool.query(`SELECT MAX(timestamp) AS ts FROM articles`);
+  return Number(rows[0].ts) || 0;
 }
 
-function totalCount() {
-  return stmts.totalCount.get().n;
+async function totalCount() {
+  const { rows } = await pool.query(`SELECT COUNT(*)::int AS n FROM articles`);
+  return rows[0].n;
 }
 
-function unreadCount() {
-  return stmts.unreadCount.get().n;
+async function unreadCount(userId) {
+  const { rows } = await pool.query(
+    `SELECT COUNT(*)::int AS n FROM articles a
+     LEFT JOIN article_state s ON s.article_id = a.id AND s.user_id = $1
+     WHERE s.read_at IS NULL`, [userId]
+  );
+  return rows[0].n;
 }
 
-function categories() {
-  return stmts.categories.all().map(r => r.category);
+async function categories() {
+  const { rows } = await pool.query(`SELECT DISTINCT category FROM articles`);
+  return rows.map(r => r.category);
 }
 
-function recentForCluster(sinceTimestamp, excludeSource) {
-  return stmts.recentForCluster.all(sinceTimestamp, excludeSource);
+async function recentForCluster(sinceTimestamp, excludeSource) {
+  const { rows } = await pool.query(
+    `SELECT id, title, cluster_id, source FROM articles
+     WHERE timestamp >= $1 AND source <> $2`,
+    [sinceTimestamp, excludeSource]
+  );
+  return rows;
 }
 
-function assignCluster(articleId, clusterId) {
-  stmts.assignCluster.run(clusterId, articleId);
+async function assignCluster(articleId, clusterId) {
+  await pool.query(`UPDATE articles SET cluster_id = $1 WHERE id = $2`, [clusterId, articleId]);
 }
 
-function clusterSources(clusterId) {
-  return stmts.clusterSources.all(clusterId).map(r => r.source);
+async function clusterSources(clusterId) {
+  const { rows } = await pool.query(
+    `SELECT source FROM articles WHERE cluster_id = $1 ORDER BY timestamp DESC`, [clusterId]
+  );
+  return rows.map(r => r.source);
 }
 
-function clusterSize(clusterId) {
-  return stmts.clusterSize.get(clusterId).n;
+async function clusterSize(clusterId) {
+  const { rows } = await pool.query(
+    `SELECT COUNT(*)::int AS n FROM articles WHERE cluster_id = $1`, [clusterId]
+  );
+  return rows[0].n;
 }
 
-function queryFeed({ category, source, search, read, saved, limit = 100, offset = 0 }) {
+// Single query returning rows + total + related_sources (array of other-source
+// names in the same cluster). Avoids N+1 lookups for the feed listing.
+async function queryFeed({ userId, category, source, search, read, saved, limit = 100, offset = 0 }) {
   const where = [];
-  const params = [];
-  if (category) { where.push('category = ?'); params.push(category); }
-  if (source)   { where.push('source = ?');   params.push(source); }
-  if (read === 'true')  where.push('read_at IS NOT NULL');
-  if (read === 'false') where.push('read_at IS NULL');
-  if (saved === 'true') where.push('saved_at IS NOT NULL');
+  const params = [userId];
+  const push = (clause, ...vals) => { where.push(clause); params.push(...vals); };
+
+  if (category) push(`a.category = $${params.length + 1}`, category);
+  if (source) push(`a.source = $${params.length + 1}`, source);
+  if (read === 'true')  where.push('s.read_at IS NOT NULL');
+  if (read === 'false') where.push('s.read_at IS NULL');
+  if (saved === 'true') where.push('s.saved_at IS NOT NULL');
   if (search) {
-    where.push('(LOWER(title) LIKE ? OR LOWER(summary) LIKE ? OR LOWER(source) LIKE ?)');
-    const q = `%${search.toLowerCase()}%`;
-    params.push(q, q, q);
+    const i = params.length + 1;
+    where.push(`(LOWER(a.title) LIKE $${i} OR LOWER(a.summary) LIKE $${i} OR LOWER(a.source) LIKE $${i})`);
+    params.push(`%${search.toLowerCase()}%`);
   }
   const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : '';
-  const totalRow = db.prepare(`SELECT COUNT(*) AS n FROM articles ${whereClause}`).get(...params);
-  const rows = db.prepare(`
-    SELECT id, title, link, pub_date, timestamp, source, category, icon, summary, creator,
-           read_at, saved_at, cluster_id
-    FROM articles
-    ${whereClause}
-    ORDER BY timestamp DESC
-    LIMIT ? OFFSET ?
-  `).all(...params, +limit, +offset);
-  return { rows, total: totalRow.n };
+
+  const totalResult = await pool.query(
+    `SELECT COUNT(*)::int AS n FROM articles a
+     LEFT JOIN article_state s ON s.article_id = a.id AND s.user_id = $1
+     ${whereClause}`,
+    params
+  );
+
+  const limitIdx = params.length + 1;
+  const offsetIdx = params.length + 2;
+  const rowsResult = await pool.query(
+    `SELECT a.id, a.title, a.link, a.pub_date, a.timestamp, a.source, a.category, a.icon,
+            a.summary, a.creator, a.cluster_id,
+            s.read_at, s.saved_at,
+            COALESCE(
+              (SELECT ARRAY_AGG(DISTINCT a2.source)
+               FROM articles a2
+               WHERE a2.cluster_id = a.cluster_id AND a2.source <> a.source),
+              ARRAY[]::text[]
+            ) AS related_sources
+     FROM articles a
+     LEFT JOIN article_state s ON s.article_id = a.id AND s.user_id = $1
+     ${whereClause}
+     ORDER BY a.timestamp DESC
+     LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
+    [...params, +limit, +offset]
+  );
+
+  return { rows: rowsResult.rows, total: totalResult.rows[0].n };
+}
+
+async function close() {
+  await pool.end();
 }
 
 module.exports = {
+  init,
+  close,
   upsertArticle,
   getArticle,
+  getArticleState,
   markRead,
   markSaved,
   setAiSummary,

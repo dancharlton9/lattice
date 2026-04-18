@@ -1,6 +1,7 @@
 const express = require('express');
 const Parser = require('rss-parser');
 const cheerio = require('cheerio');
+const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
 
@@ -10,7 +11,49 @@ const { extract } = require('./extract');
 const ai = require('./ai');
 
 const app = express();
+
+// Behind Azure Container Apps (or any HTTPS-terminating ingress) so we can
+// trust X-Forwarded-Proto for the Secure cookie flag.
+app.set('trust proxy', true);
 app.use(express.json());
+
+// Anonymous per-visitor identity. Read/saved state is scoped to this id.
+// The cookie is HttpOnly so only the server reads it, sent automatically on
+// same-origin requests. Clearing cookies resets state — that's the tradeoff
+// of "no auth".
+const UID_COOKIE = 'lattice_uid';
+const UID_MAX_AGE_S = 60 * 60 * 24 * 365; // 1 year
+const UID_RE = /^[a-f0-9-]{16,64}$/i;
+
+function readCookie(req, name) {
+  const raw = req.headers.cookie || '';
+  for (const pair of raw.split(';')) {
+    const idx = pair.indexOf('=');
+    if (idx === -1) continue;
+    const k = pair.slice(0, idx).trim();
+    if (k === name) return decodeURIComponent(pair.slice(idx + 1).trim());
+  }
+  return null;
+}
+
+app.use((req, res, next) => {
+  let uid = readCookie(req, UID_COOKIE);
+  if (!uid || !UID_RE.test(uid)) {
+    uid = crypto.randomUUID();
+    const secure = req.secure || req.headers['x-forwarded-proto'] === 'https';
+    const parts = [
+      `${UID_COOKIE}=${uid}`,
+      'Path=/',
+      `Max-Age=${UID_MAX_AGE_S}`,
+      'HttpOnly',
+      'SameSite=Lax',
+    ];
+    if (secure) parts.push('Secure');
+    res.setHeader('Set-Cookie', parts.join('; '));
+  }
+  req.userId = uid;
+  next();
+});
 
 const rssParser = new Parser({
   customFields: {
@@ -38,10 +81,10 @@ function loadFeeds() {
   }
 }
 
-function scheduleFeeds() {
+async function scheduleFeeds() {
   for (const timer of feedTimers.values()) clearInterval(timer);
   feedTimers.clear();
-  db.pruneFeedHealth(feedConfig.map(f => f.name));
+  await db.pruneFeedHealth(feedConfig.map(f => f.name));
 
   for (const feed of feedConfig) {
     const intervalMs = (feed.interval || DEFAULT_INTERVAL_S) * 1000;
@@ -134,13 +177,13 @@ function toArticle(feed, item) {
   };
 }
 
-function clusterNewArticle(article) {
-  const candidates = db.recentForCluster(Date.now() - CLUSTER_WINDOW_MS, article.source);
+async function clusterNewArticle(article) {
+  const candidates = await db.recentForCluster(Date.now() - CLUSTER_WINDOW_MS, article.source);
   const match = clusterer.findBestMatch(article.title, candidates);
   if (!match) return;
   const clusterId = match.cluster_id || match.id;
-  if (!match.cluster_id) db.assignCluster(match.id, clusterId);
-  db.assignCluster(article.id, clusterId);
+  if (!match.cluster_id) await db.assignCluster(match.id, clusterId);
+  await db.assignCluster(article.id, clusterId);
 }
 
 async function ingestFeed(feed) {
@@ -152,14 +195,14 @@ async function ingestFeed(feed) {
 
     for (const item of items) {
       const article = toArticle(feed, item);
-      const isNew = db.upsertArticle(article);
+      const isNew = await db.upsertArticle(article);
       if (isNew) {
         newCount++;
-        clusterNewArticle(article);
+        await clusterNewArticle(article);
       }
     }
 
-    db.recordFeedAttempt({
+    await db.recordFeedAttempt({
       name: feed.name,
       url: feed.url,
       category: feed.category,
@@ -171,28 +214,26 @@ async function ingestFeed(feed) {
     }
     return { newCount, itemCount: items.length };
   } catch (e) {
-    db.recordFeedAttempt({
+    await db.recordFeedAttempt({
       name: feed.name,
       url: feed.url,
       category: feed.category,
       success: false,
       errorMessage: e.message,
-    });
+    }).catch(() => {});
     console.warn(`[${feed.name}] failed: ${e.message}`);
     throw e;
   }
 }
 
+// Row decoration now uses related_sources from the query (no follow-up lookups).
 function decorateRow(row) {
-  const clusterSources = row.cluster_id
-    ? db.clusterSources(row.cluster_id).filter(s => s !== row.source)
-    : [];
   return {
     id: row.id,
     title: row.title,
     link: row.link,
     pubDate: row.pub_date,
-    timestamp: row.timestamp,
+    timestamp: Number(row.timestamp),
     source: row.source,
     category: row.category,
     icon: row.icon,
@@ -201,73 +242,89 @@ function decorateRow(row) {
     read: !!row.read_at,
     saved: !!row.saved_at,
     clusterId: row.cluster_id,
-    relatedSources: [...new Set(clusterSources)],
+    relatedSources: (row.related_sources || []).filter(s => s !== row.source),
   };
 }
 
-// Serve static files
+// Serve static files. Branding/favicon assets live at /assets but also at the
+// root (so /favicon.svg, /site.webmanifest etc resolve without rewriting).
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/assets', express.static(path.join(__dirname, 'assets'), { maxAge: '7d' }));
+app.use(express.static(path.join(__dirname, 'assets'), { maxAge: '7d' }));
 
 // Feed listing
-app.get('/api/feed', (req, res) => {
+app.get('/api/feed', async (req, res) => {
   const { category, source, search, read, saved, limit = 100, offset = 0 } = req.query;
-  const { rows, total } = db.queryFeed({ category, source, search, read, saved, limit, offset });
-  const items = rows.map(decorateRow);
-  res.json({
-    items,
-    total,
-    maxTimestamp: db.maxTimestamp(),
-    errors: db.getFeedHealth()
-      .filter(h => h.consecutive_failures > 0)
-      .map(h => ({ source: h.name, error: h.last_error })),
-  });
+  try {
+    const [{ rows, total }, maxTs, health] = await Promise.all([
+      db.queryFeed({ userId: req.userId, category, source, search, read, saved, limit, offset }),
+      db.maxTimestamp(),
+      db.getFeedHealth(),
+    ]);
+    res.json({
+      items: rows.map(decorateRow),
+      total,
+      maxTimestamp: maxTs,
+      errors: health.filter(h => h.consecutive_failures > 0)
+                    .map(h => ({ source: h.name, error: h.last_error })),
+    });
+  } catch (e) {
+    console.error('feed query failed:', e);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // New-article count for background notifications
-app.get('/api/new-count', (req, res) => {
+app.get('/api/new-count', async (req, res) => {
   const since = parseInt(req.query.since, 10) || 0;
-  res.json({ count: db.countSince(since), maxTimestamp: db.maxTimestamp() });
+  const [count, maxTs] = await Promise.all([db.countSince(since), db.maxTimestamp()]);
+  res.json({ count, maxTimestamp: maxTs });
 });
 
 // Single article
-app.get('/api/article/:id', (req, res) => {
-  const row = db.getArticle(req.params.id);
+app.get('/api/article/:id', async (req, res) => {
+  const row = await db.getArticle(req.params.id);
   if (!row) return res.status(404).json({ error: 'Not found' });
-  const related = row.cluster_id
-    ? db.clusterSources(row.cluster_id).filter(s => s !== row.source)
-    : [];
+  const [state, related] = await Promise.all([
+    db.getArticleState(req.userId, row.id),
+    row.cluster_id ? db.clusterSources(row.cluster_id) : Promise.resolve([]),
+  ]);
   res.json({
-    ...decorateRow(row),
+    ...decorateRow({
+      ...row,
+      read_at: state.read ? 1 : null,
+      saved_at: state.saved ? 1 : null,
+      related_sources: related,
+    }),
     fullContent: row.full_content,
     summaryAi: row.summary_ai,
-    relatedSources: [...new Set(related)],
   });
 });
 
-// Article read/save mutations
-app.post('/api/article/:id/read', (req, res) => {
+// Article read/save mutations (scoped to the visitor's cookie id)
+app.post('/api/article/:id/read', async (req, res) => {
   const read = req.body?.read !== false;
-  if (!db.getArticle(req.params.id)) return res.status(404).json({ error: 'Not found' });
-  db.markRead(req.params.id, read);
+  if (!(await db.getArticle(req.params.id))) return res.status(404).json({ error: 'Not found' });
+  await db.markRead(req.userId, req.params.id, read);
   res.json({ ok: true, read });
 });
 
-app.post('/api/article/:id/save', (req, res) => {
+app.post('/api/article/:id/save', async (req, res) => {
   const saved = req.body?.saved !== false;
-  if (!db.getArticle(req.params.id)) return res.status(404).json({ error: 'Not found' });
-  db.markSaved(req.params.id, saved);
+  if (!(await db.getArticle(req.params.id))) return res.status(404).json({ error: 'Not found' });
+  await db.markSaved(req.userId, req.params.id, saved);
   res.json({ ok: true, saved });
 });
 
 // AI features (optional)
 app.post('/api/article/:id/summary', async (req, res) => {
   if (!ai.enabled) return res.status(501).json({ error: 'AI disabled — set ANTHROPIC_API_KEY' });
-  const row = db.getArticle(req.params.id);
+  const row = await db.getArticle(req.params.id);
   if (!row) return res.status(404).json({ error: 'Not found' });
   if (row.summary_ai && !req.body?.refresh) return res.json({ summary: row.summary_ai, cached: true });
   try {
     const summary = await ai.summarize(row);
-    if (summary) db.setAiSummary(row.id, summary);
+    if (summary) await db.setAiSummary(row.id, summary);
     res.json({ summary, cached: false });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -277,8 +334,8 @@ app.post('/api/article/:id/summary', async (req, res) => {
 app.get('/api/digest', async (req, res) => {
   if (!ai.enabled) return res.status(501).json({ error: 'AI disabled — set ANTHROPIC_API_KEY' });
   const since = Date.now() - (parseInt(req.query.hours, 10) || 24) * 3600 * 1000;
-  const { rows } = db.queryFeed({ limit: 40, offset: 0 });
-  const recent = rows.filter(r => r.timestamp >= since);
+  const { rows } = await db.queryFeed({ userId: req.userId, limit: 40, offset: 0 });
+  const recent = rows.filter(r => Number(r.timestamp) >= since);
   try {
     const text = await ai.digest(recent);
     res.json({ digest: text, articleCount: recent.length });
@@ -293,8 +350,8 @@ app.get('/api/content', async (req, res) => {
   if (!url) return res.status(400).json({ error: 'URL required' });
   try { new URL(url); } catch { return res.status(400).json({ error: 'Invalid URL' }); }
 
-  const cached = db.getExtracted(url);
-  if (cached && Date.now() - cached.fetched_at < EXTRACT_CACHE_MS) {
+  const cached = await db.getExtracted(url);
+  if (cached && Date.now() - Number(cached.fetched_at) < EXTRACT_CACHE_MS) {
     return res.json({
       title: cached.title,
       content: cached.content,
@@ -306,7 +363,7 @@ app.get('/api/content', async (req, res) => {
 
   try {
     const result = await extract(url);
-    db.setExtracted({ url, ...result });
+    await db.setExtracted({ url, ...result });
     res.json({ ...result, cached: false });
   } catch (e) {
     console.warn(`extract failed for ${url}: ${e.message}`);
@@ -329,63 +386,76 @@ app.get('/api/sources', (req, res) => {
   res.json(categories);
 });
 
-app.get('/api/feed-health', (req, res) => {
-  const health = db.getFeedHealth();
+app.get('/api/feed-health', async (req, res) => {
+  const health = await db.getFeedHealth();
   const now = Date.now();
   res.json(health.map(h => ({
     name: h.name,
     url: h.url,
     category: h.category,
-    lastSuccess: h.last_success,
-    lastAttempt: h.last_attempt,
+    lastSuccess: Number(h.last_success) || null,
+    lastAttempt: Number(h.last_attempt) || null,
     lastError: h.last_error,
-    lastErrorAt: h.last_error_at,
+    lastErrorAt: Number(h.last_error_at) || null,
     itemCount: h.last_item_count,
     consecutiveFailures: h.consecutive_failures,
     status: !h.last_success ? 'unknown'
           : h.consecutive_failures >= 3 ? 'down'
           : h.consecutive_failures > 0 ? 'degraded'
-          : (now - h.last_success > 48 * 3600 * 1000) ? 'stale'
+          : (now - Number(h.last_success) > 48 * 3600 * 1000) ? 'stale'
           : 'ok',
   })));
 });
 
-app.get('/api/stats', (req, res) => {
+app.get('/api/stats', async (req, res) => {
+  const [itemCount, unreadCount, maxTs, health] = await Promise.all([
+    db.totalCount(),
+    db.unreadCount(req.userId),
+    db.maxTimestamp(),
+    db.getFeedHealth(),
+  ]);
   res.json({
     feedCount: feedConfig.length,
-    itemCount: db.totalCount(),
-    unreadCount: db.unreadCount(),
-    maxTimestamp: db.maxTimestamp(),
+    itemCount,
+    unreadCount,
+    maxTimestamp: maxTs,
     categories: [...new Set(feedConfig.map(f => f.category))],
     aiEnabled: ai.enabled,
-    errors: db.getFeedHealth()
-      .filter(h => h.consecutive_failures > 0)
-      .map(h => ({ source: h.name, error: h.last_error })),
+    errors: health.filter(h => h.consecutive_failures > 0)
+                  .map(h => ({ source: h.name, error: h.last_error })),
   });
 });
 
-app.get('/api/health', (req, res) => {
-  res.json({
-    status: 'ok',
-    uptime: process.uptime(),
-    itemCount: db.totalCount(),
-    maxTimestamp: db.maxTimestamp(),
-  });
+app.get('/api/health', async (req, res) => {
+  try {
+    const [itemCount, maxTs] = await Promise.all([db.totalCount(), db.maxTimestamp()]);
+    res.json({ status: 'ok', uptime: process.uptime(), itemCount, maxTimestamp: maxTs });
+  } catch (e) {
+    res.status(503).json({ status: 'error', error: e.message });
+  }
 });
 
-// Start server
-loadFeeds();
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Lattice running on port ${PORT} (AI ${ai.enabled ? 'enabled' : 'disabled'})`);
-  scheduleFeeds();
-});
-
-// Background maintenance: prune old extracted-content cache daily
-setInterval(() => db.pruneExtracted(EXTRACT_CACHE_MS), 24 * 3600 * 1000);
-
-fs.watchFile(FEEDS_FILE, { interval: 5000 }, () => {
-  console.log('feeds.json changed, reloading...');
+// Start server (init DB before accepting traffic)
+async function main() {
+  await db.init();
   loadFeeds();
-  scheduleFeeds();
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Lattice running on port ${PORT} (AI ${ai.enabled ? 'enabled' : 'disabled'})`);
+    scheduleFeeds().catch(e => console.error('scheduleFeeds failed:', e));
+  });
+
+  // Background maintenance: prune old extracted-content cache daily
+  setInterval(() => db.pruneExtracted(EXTRACT_CACHE_MS).catch(() => {}), 24 * 3600 * 1000);
+
+  fs.watchFile(FEEDS_FILE, { interval: 5000 }, () => {
+    console.log('feeds.json changed, reloading...');
+    loadFeeds();
+    scheduleFeeds().catch(e => console.error('scheduleFeeds failed:', e));
+  });
+}
+
+main().catch(err => {
+  console.error('Fatal:', err);
+  process.exit(1);
 });
